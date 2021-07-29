@@ -1,0 +1,17 @@
+[package]
+name = "vector_space_model"
+version = "0.1.0"
+edition = "2018"
+license = "AGPL-3.0"
+authors = ["jojii <jojii aT gmx.net>"]
+repository = "https://github.com/JojiiOfficial/VectorSpaceModel"
+description = "Highly efficient vector space model implementation written in rust"
+keywords = ["vector-space-model", "information-retrieval", "information", "retrieval","search", "search-engine"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+indexed_file = { git = "https://github.com/JojiiOfficial/IndexedFile" }
+byteorder = "1.4.3"
+tar = "0.4.35"
+flate2 = "1.0.20"
