@@ -85,8 +85,8 @@ impl<D> DocumentVector<D> {
     }
 
     #[inline(always)]
-    pub fn overlapping(&self, other: &Self) -> bool {
-        self.vec.have_overlapping(&other.vec)
+    pub fn overlaps_with(&self, other: &Self) -> bool {
+        self.vec.overlaps_with(&other.vec)
     }
 }
 
@@ -216,16 +216,20 @@ impl WordVec {
     }
 
     /// Returns true if both vectors have at least one dimension in common
-    #[inline(always)]
-    pub fn have_overlapping(&self, other: &WordVec) -> bool {
+    pub fn overlaps_with(&self, other: &WordVec) -> bool {
         // little speedup
         if self.first_indice() > other.last_indice() || self.last_indice() < other.first_indice() {
             return false;
         }
 
-        // TODO: maybe we can use lockStepIter here for better performance?
+        LockStepIter::new(self.inner.iter().copied(), other.inner.iter().copied())
+            .next()
+            .is_some()
+
+        /*
         self.vec_indices()
             .any(|i| other.vec_indices().any(|j| i == j))
+            */
     }
 
     /// Returns the amount of dimensions the vector uses
@@ -282,7 +286,7 @@ impl WordVec {
     }
 
     /// Update the vector values
-    fn update(&mut self) {
+    pub fn update(&mut self) {
         // Calculate new vector length
         self.length = self.calc_len();
 
