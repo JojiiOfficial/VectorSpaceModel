@@ -183,7 +183,8 @@ impl<D: Decodable + Clone + Unpin> Future for AsyncDocRetrieval<D> {
         let end = min(self.vec_refs.len(), self.last_pos + 200);
 
         for vec_pos in start..end {
-            if let Err(err) = self.store.read_line_raw(vec_pos, &mut buf) {
+            let vec_id = self.vec_refs[vec_pos];
+            if let Err(err) = self.store.read_line_raw(vec_id, &mut buf) {
                 return Poll::Ready(Err(err.into()));
             }
 
