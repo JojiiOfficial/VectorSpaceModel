@@ -61,8 +61,16 @@ impl<D: Decodable + Clone> VectorStore<D> {
     }
 
     /// Set the dim_vec_map to `map`
+    #[inline(always)]
     pub fn set_dim_map(&mut self, map: DimVecMap) {
         self.map = map;
+    }
+
+    /// Return the size of the given dimension. The size represents the amount of vectors which are
+    /// laying in the dimension.
+    #[inline]
+    pub fn dimension_size(&self, dimension: u32) -> usize {
+        self.map.get(dimension).map(|i| i.len()).unwrap_or(0)
     }
 
     /// Returns all vectors in `dimension`
