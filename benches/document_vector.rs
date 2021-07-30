@@ -1,16 +1,16 @@
 use std::time::Instant;
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use vector_space_model::document_vector::WordVec;
+use vector_space_model::document_vector::Vector;
 
-fn get_word_vector(size: usize, seed: usize) -> WordVec {
+fn get_word_vector(size: usize, seed: usize) -> Vector {
     let values = (seed / size % 10..)
         .step_by(seed / size + 1)
         .map(|i| (i as u32, i as f32))
         .take(size)
         .collect();
 
-    let mut vec = WordVec::new_raw(values, 100f32);
+    let mut vec = Vector::new_raw(values, 100f32);
     vec.update();
     vec
 }

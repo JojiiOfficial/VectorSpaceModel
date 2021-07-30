@@ -32,12 +32,12 @@ pub trait Indexable {
 #[derive(Clone, Debug, Eq)]
 pub struct DocumentVector<D> {
     pub document: D,
-    vec: WordVec,
+    vec: Vector,
 }
 
 impl<D: Document> DocumentVector<D> {
     pub fn new<V: Indexable>(index: &V, document: D) -> Option<Self> {
-        let vec = WordVec::new(index, &document)?;
+        let vec = Vector::new(index, &document)?;
         Some(Self { document, vec })
     }
 
@@ -71,7 +71,7 @@ impl<D: Document> DocumentVector<D> {
 impl<D> DocumentVector<D> {
     /// Create a new DocumentVector from a document and its vector
     #[inline]
-    pub fn new_from_vector(document: D, vec: WordVec) -> Self {
+    pub fn new_from_vector(document: D, vec: Vector) -> Self {
         Self { document, vec }
     }
 
@@ -81,7 +81,7 @@ impl<D> DocumentVector<D> {
     }
 
     #[inline(always)]
-    pub fn vector(&self) -> &WordVec {
+    pub fn vector(&self) -> &Vector {
         &self.vec
     }
 
@@ -149,7 +149,7 @@ impl<D: Decodable> Decodable for DocumentVector<D> {
 
         let doc = D::decode::<T, _>(data)?;
 
-        let vec = WordVec::new_raw(dimensions, vec_length);
+        let vec = Vector::new_raw(dimensions, vec_length);
 
         Ok(DocumentVector::new_from_vector(doc, vec))
     }
@@ -157,14 +157,14 @@ impl<D: Decodable> Decodable for DocumentVector<D> {
 
 /// A document vector
 #[derive(Clone, Debug)]
-pub struct WordVec {
+pub struct Vector {
     /// Dimensions mapped to values
     inner: Vec<(u32, f32)>,
     /// Length of the vector
     length: f32,
 }
 
-impl WordVec {
+impl Vector {
     /// Creates a new word vector from a Document using an index
     pub fn new<V: Indexable, D: Document>(index: &V, document: &D) -> Option<Self> {
         let inner: Vec<(u32, f32)> = document
@@ -202,7 +202,7 @@ impl WordVec {
 
     /// Calculates the similarity between two vectors
     #[inline]
-    pub fn similarity(&self, other: &WordVec) -> f32 {
+    pub fn similarity(&self, other: &Vector) -> f32 {
         self.scalar(other) / (self.length * other.length)
     }
 
@@ -219,7 +219,7 @@ impl WordVec {
     }
 
     /// Returns true if both vectors have at least one dimension in common
-    pub fn overlaps_with(&self, other: &WordVec) -> bool {
+    pub fn overlaps_with(&self, other: &Vector) -> bool {
         // little speedup
         if self.first_indice() > other.last_indice() || self.last_indice() < other.first_indice() {
             return false;
@@ -329,7 +329,7 @@ impl WordVec {
     }
 
     #[inline]
-    fn scalar(&self, other: &WordVec) -> f32 {
+    fn scalar(&self, other: &Vector) -> f32 {
         LockStepIter::new(self.inner.iter().copied(), other.inner.iter().copied())
             .map(|(_, a, b)| a * b)
             .sum()
@@ -385,23 +385,23 @@ fn occurences<D: Document>(term: &str, document: &D) -> usize {
     document.get_terms().iter().filter(|i| *i == term).count()
 }
 
-impl PartialEq for WordVec {
+impl PartialEq for Vector {
     fn eq(&self, other: &Self) -> bool {
         self.inner == other.inner
     }
 }
 
-impl Eq for WordVec {
+impl Eq for Vector {
     fn assert_receiver_is_total_eq(&self) {}
 }
 
-impl PartialOrd for WordVec {
+impl PartialOrd for Vector {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.inner.partial_cmp(&other.inner)
     }
 }
 
-impl Ord for WordVec {
+impl Ord for Vector {
     fn cmp(&self, other: &Self) -> Ordering {
         self.inner.partial_cmp(&other.inner).unwrap()
     }

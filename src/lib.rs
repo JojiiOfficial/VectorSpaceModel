@@ -6,3 +6,9 @@ pub mod metadata;
 pub mod term_indexer;
 pub mod traits;
 pub mod vector_store;
+
+pub use document_vector::{Document, DocumentVector, Indexable, Vector};
+pub use error::Error;
+pub use index::{Index, NewIndex};
+pub use metadata::Metadata;
+pub use vector_store::VectorStore;
