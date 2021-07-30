@@ -31,7 +31,7 @@ pub(crate) const FILE_NAME: &str = "vectors";
 #[derive(Debug, Clone)]
 pub struct VectorStore<D: Decodable + Clone> {
     store: IndexedReader<Vec<u8>>,
-    map: DimVecMap,
+    map: Arc<DimVecMap>,
     vec_type: PhantomData<D>,
 }
 
@@ -55,7 +55,7 @@ impl<D: Decodable + Clone> VectorStore<D> {
 
         Ok(Self {
             store: data,
-            map: DimVecMap::default(),
+            map: Arc::new(DimVecMap::default()),
             vec_type: PhantomData,
         })
     }
@@ -63,7 +63,7 @@ impl<D: Decodable + Clone> VectorStore<D> {
     /// Set the dim_vec_map to `map`
     #[inline(always)]
     pub fn set_dim_map(&mut self, map: DimVecMap) {
-        self.map = map;
+        self.map = Arc::new(map);
     }
 
     /// Return the size of the given dimension. The size represents the amount of vectors which are
