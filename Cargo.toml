@@ -17,9 +17,17 @@ tar = "0.4.35"
 flate2 = "1.0.20"
 
 [dev-dependencies]
-criterion = { version = "0.3.4" }
+criterion = "0.3.5"
 rand = "0.8.4"
 
 [[bench]]
 name = "document_vector"
+harness = false
+
+[[bench]]
+name = "vector_store"
+harness = false
+
+[[bench]]
+name = "term_indexer"
 harness = false

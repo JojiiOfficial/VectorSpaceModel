@@ -70,6 +70,7 @@ impl<D: Document> DocumentVector<D> {
 
 impl<D> DocumentVector<D> {
     /// Create a new DocumentVector from a document and its vector
+    #[inline]
     pub fn new_from_vector(document: D, vec: WordVec) -> Self {
         Self { document, vec }
     }
@@ -130,6 +131,7 @@ impl<D: Encodable> Encodable for DocumentVector<D> {
 }
 
 impl<D: Decodable> Decodable for DocumentVector<D> {
+    #[inline]
     fn decode<T: ByteOrder, R: Read>(mut data: R) -> Result<Self, Error> {
         // 0..4 vector length
         let vec_length = data.read_f32::<T>()?;
@@ -190,6 +192,7 @@ impl WordVec {
     }
 
     /// Create a new WordVec from raw values
+    #[inline]
     pub fn new_raw(sparse: Vec<(u32, f32)>, length: f32) -> Self {
         Self {
             inner: sparse,
@@ -198,19 +201,19 @@ impl WordVec {
     }
 
     /// Calculates the similarity between two vectors
-    #[inline(always)]
+    #[inline]
     pub fn similarity(&self, other: &WordVec) -> f32 {
         self.scalar(other) / (self.length * other.length)
     }
 
     /// Returns the reference to the inner vector
-    #[inline(always)]
+    #[inline]
     pub fn sparse_vec(&self) -> &Vec<(u32, f32)> {
         &self.inner
     }
 
     /// Returns true if the vector is zero
-    #[inline(always)]
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.inner.is_empty()
     }
@@ -225,33 +228,28 @@ impl WordVec {
         LockStepIter::new(self.inner.iter().copied(), other.inner.iter().copied())
             .next()
             .is_some()
-
-        /*
-        self.vec_indices()
-            .any(|i| other.vec_indices().any(|j| i == j))
-            */
     }
 
     /// Returns the amount of dimensions the vector uses
-    #[inline(always)]
+    #[inline]
     pub fn dimen_count(&self) -> usize {
         self.inner.len()
     }
 
     /// Returns true if vector has a certain dimension
-    #[inline(always)]
+    #[inline]
     pub fn has_dim(&self, dim: u32) -> bool {
         self.vec_indices().any(|i| i == dim)
     }
 
     /// Returns an iterator over all dimensions of the vector
-    #[inline(always)]
+    #[inline]
     pub fn vec_indices(&self) -> impl Iterator<Item = u32> + '_ {
         self.inner.iter().map(|i| i.0)
     }
 
     /// Returns an iterator over all values of the vector
-    #[inline(always)]
+    #[inline]
     pub fn vec_values(&self) -> impl Iterator<Item = f32> + '_ {
         self.inner.iter().map(|i| i.1)
     }
@@ -330,7 +328,7 @@ impl WordVec {
         self.inner.retain(|(curr_dim, _)| *curr_dim == dim);
     }
 
-    #[inline(always)]
+    #[inline]
     fn scalar(&self, other: &WordVec) -> f32 {
         LockStepIter::new(self.inner.iter().copied(), other.inner.iter().copied())
             .map(|(_, a, b)| a * b)

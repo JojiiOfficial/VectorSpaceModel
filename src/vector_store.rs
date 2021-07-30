@@ -66,13 +66,14 @@ impl<D: Decodable + Clone> VectorStore<D> {
 
         let documents = vec_refs
             .into_iter()
-            .map(|i| self.get_vec_by_position(i).ok().unwrap())
+            .map(|i| self.get_vec_by_position(i).expect("invalid index format"))
             .collect::<Vec<_>>();
 
         Some(documents)
     }
 
     /// Read and decode a vector from `self.store` and returns it
+    #[inline(always)]
     fn get_vec_by_position(&mut self, line: usize) -> Result<DocumentVector<D>, Error> {
         let mut buf = Vec::new();
         self.store.read_line_raw(line, &mut buf)?;

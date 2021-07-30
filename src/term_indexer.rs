@@ -23,15 +23,23 @@ pub struct TermIndexer {
 
 /// A single term info represented by a single line in `TermIndexer`
 #[derive(Debug, Clone)]
-struct IndexItem {
+pub struct IndexItem {
     text: String,
     frequency: u32,
 }
 
 impl<T: ToString> From<T> for IndexItem {
+    #[inline(always)]
     fn from(s: T) -> Self {
         let s = s.to_string();
-        let split_pos = s.char_indices().rev().find(|i| i.1 == ',').unwrap().0;
+
+        let split_pos = s
+            .char_indices()
+            .rev()
+            .find(|i| i.1 == ',')
+            .expect("Invalid Term index file")
+            .0;
+
         let text = s[..split_pos].to_owned();
         let frequency: u32 = s[split_pos + 1..].parse().unwrap();
         IndexItem { text, frequency }
