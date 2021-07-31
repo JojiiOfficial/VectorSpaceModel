@@ -34,8 +34,8 @@ impl<D: Decodable + Clone> Index<D> {
 
     /// Returns the vector store of the index
     #[inline]
-    pub fn get_vector_store(&self) -> VectorStore<D> {
-        self.vector_store.clone()
+    pub fn get_vector_store(&self) -> &VectorStore<D> {
+        &self.vector_store
     }
 
     /// Returns the indexer of the index
