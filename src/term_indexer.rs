@@ -9,8 +9,8 @@ pub(crate) const FILE_NAME: &str = "term_indexer";
 
 use byteorder::{LittleEndian, WriteBytesExt};
 use indexed_file::{
-    any::IndexedReader, index::Header as IndexHeader, index::Index as FileIndex, IndexableFile,
-    ReadByLine,
+    any::IndexedReader, index::Header as IndexHeader, index::Index as FileIndex, Indexable,
+    IndexableFile, ReadByLine,
 };
 
 use crate::{document_vector, error::Error, index::IndexBuilder, traits::Encodable};
@@ -41,6 +41,16 @@ impl IndexItem {
         let frequency = u16::from_le_bytes(data[0..2].try_into().unwrap());
         let text = String::from_utf8_lossy(&data[2..]).to_string();
         Ok(Self { text, frequency })
+    }
+
+    #[inline]
+    pub fn get_text(&self) -> &str {
+        &self.text
+    }
+
+    #[inline]
+    pub fn get_frequency(&self) -> u16 {
+        self.frequency
     }
 }
 
@@ -102,6 +112,27 @@ impl TermIndexer {
             index: indexed_terms,
             tot_documents,
         })
+    }
+
+    /// Returns the total amount of terms in the term index
+    #[inline]
+    pub fn size(&self) -> usize {
+        self.index.total_lines()
+    }
+
+    /// Finds a term in the termindex
+    #[inline]
+    pub fn find_term(&mut self, term: &str) -> Option<IndexItem> {
+        let dimension = Self::binary_search(&mut self.index, term)?;
+        self.load_term(dimension)
+    }
+
+    /// Gets a term by its dimension
+    #[inline]
+    pub fn load_term(&mut self, dimension: usize) -> Option<IndexItem> {
+        let mut buf = Vec::with_capacity(6);
+        self.index.read_line_raw(dimension, &mut buf).ok()?;
+        Some(IndexItem::decode(&buf).ok()?)
     }
 
     /// Sets the total amount of documents in the index. This is required for better indexing
