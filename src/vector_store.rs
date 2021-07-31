@@ -160,6 +160,7 @@ impl<D: Decodable + Clone + Unpin> AsyncDocRetrieval<D> {
             // output
             out: Vec::with_capacity(vec_refs.len()),
             last_pos: 0,
+
             // input
             store,
             vec_refs,
@@ -230,9 +231,7 @@ where
         file_index.push(encoded_vectors.len() as u64);
 
         // Encode document vector and push as new line to encoded_documents
-        let encoded = vector.encode::<LittleEndian>()?;
-        encoded_vectors.extend(&encoded);
-        encoded_vectors.push(b'\n');
+        encoded_vectors.extend(&vector.encode::<LittleEndian>()?);
     }
 
     DimVecMap::new(dim_vec_map).build(index_builder)?;

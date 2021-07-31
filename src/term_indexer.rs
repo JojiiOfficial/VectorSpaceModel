@@ -1,4 +1,5 @@
 use std::{
+    convert::TryInto,
     io::{BufReader, Read, Seek, SeekFrom},
     sync::Arc,
 };
@@ -6,18 +7,19 @@ use std::{
 /// File name in the index tar
 pub(crate) const FILE_NAME: &str = "term_indexer";
 
+use byteorder::{LittleEndian, WriteBytesExt};
 use indexed_file::{
-    index::Header as IndexHeader, index::Index as FileIndex, IndexableFile, IndexedString,
+    any::IndexedReader, index::Header as IndexHeader, index::Index as FileIndex, IndexableFile,
     ReadByLine,
 };
 
-use crate::{document_vector, error::Error, index::IndexBuilder};
+use crate::{document_vector, error::Error, index::IndexBuilder, traits::Encodable};
 
 /// An in memory TermIndexer that allows efficient indexing of terms which is requried for document
 /// vectors being calculated.
 #[derive(Debug, Clone)]
 pub struct TermIndexer {
-    index: IndexedString,
+    index: IndexedReader<Vec<u8>>,
     tot_documents: usize,
 }
 
@@ -25,24 +27,29 @@ pub struct TermIndexer {
 #[derive(Debug, Clone)]
 pub struct IndexItem {
     text: String,
-    frequency: u32,
+    frequency: u16,
 }
 
-impl<T: ToString> From<T> for IndexItem {
+impl IndexItem {
+    #[inline]
+    pub fn new(text: String, frequency: u16) -> IndexItem {
+        Self { text, frequency }
+    }
+
     #[inline(always)]
-    fn from(s: T) -> Self {
-        let s = s.to_string();
+    pub fn decode(data: &[u8]) -> Result<Self, Error> {
+        let frequency = u16::from_le_bytes(data[0..2].try_into().unwrap());
+        let text = String::from_utf8_lossy(&data[2..]).to_string();
+        Ok(Self { text, frequency })
+    }
+}
 
-        let split_pos = s
-            .char_indices()
-            .rev()
-            .find(|i| i.1 == ',')
-            .expect("Invalid Term index file")
-            .0;
-
-        let text = s[..split_pos].to_owned();
-        let frequency: u32 = s[split_pos + 1..].parse().unwrap();
-        IndexItem { text, frequency }
+impl Encodable for IndexItem {
+    fn encode<T: byteorder::ByteOrder>(&self) -> Result<Vec<u8>, Error> {
+        let mut out = Vec::new();
+        out.write_u16::<T>(self.frequency)?;
+        out.extend(self.text.as_bytes());
+        Ok(out)
     }
 }
 
@@ -56,9 +63,9 @@ impl TermIndexer {
         let index = FileIndex::decode(&mut reader, &header)?;
         reader.seek(SeekFrom::Start(index.len_bytes() as u64))?;
 
-        let mut s: String = String::new();
-        reader.read_to_string(&mut s)?;
-        let mem_index = IndexedString::new_custom(s, Arc::new(index.zero_len()));
+        let mut s = Vec::new();
+        reader.read_to_end(&mut s)?;
+        let mem_index = IndexedReader::new_custom(s, Arc::new(index.zero_len()));
 
         Ok(TermIndexer {
             index: mem_index,
@@ -67,17 +74,24 @@ impl TermIndexer {
     }
 
     /// Build a new term indexer for language `lang` using JMdict.
-    pub(crate) fn build<T, U: AsRef<str>>(
+    pub(crate) fn build<T>(
         index_builder: &mut IndexBuilder,
         tot_documents: usize,
         terms: T,
     ) -> Result<Self, Error>
     where
-        T: Iterator<Item = U>,
+        T: Iterator<Item = IndexItem>,
     {
-        let terms: String = terms.fold(String::new(), |a, b| a + b.as_ref() + "\n");
+        let mut index = Vec::new();
+        let mut text = Vec::new();
 
-        let mut indexed_terms = IndexedString::new_raw(terms)?;
+        for term in terms {
+            index.push(text.len() as u64);
+            text.extend(term.encode::<LittleEndian>()?);
+        }
+
+        let mut indexed_terms =
+            IndexedReader::new_custom(text, Arc::new(FileIndex::new(index).zero_len()));
 
         // Write term indexer
         let mut data = Vec::new();
@@ -95,10 +109,10 @@ impl TermIndexer {
         self.tot_documents = tot_documents;
     }
 
-    fn binary_search(index: &mut IndexedString, query: &str) -> Option<usize> {
+    fn binary_search(index: &mut IndexedReader<Vec<u8>>, query: &str) -> Option<usize> {
         index
-            .binary_search_by(|i| {
-                let item = IndexItem::from(i);
+            .binary_search_raw_by(|i| {
+                let item = IndexItem::decode(&i).unwrap();
                 item.text.as_str().cmp(&query)
             })
             .ok()
@@ -145,12 +159,13 @@ impl document_vector::Indexable for TermIndexer {
             None => return Some(1),
         };
 
-        let frequency = index
-            .read_line(item_pos)
-            .map(IndexItem::from)
-            .map(|i| i.frequency as usize)
-            .unwrap_or(1);
+        let mut buf = Vec::with_capacity(6);
+        let item = index
+            .read_line_raw(item_pos, &mut buf)
+            .ok()
+            .and_then(|_| IndexItem::decode(&buf).ok())
+            .expect("Invalid term index file");
 
-        Some(frequency)
+        Some(item.frequency as usize)
     }
 }

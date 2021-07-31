@@ -12,7 +12,7 @@ use crate::{
     document_vector::DocumentVector,
     error::Error,
     metadata::{self, IndexVersion, Metadata},
-    term_indexer::{self, TermIndexer},
+    term_indexer::{self, IndexItem, TermIndexer},
     traits::{Decodable, Encodable},
     vector_store::{self, VectorStore},
 };
@@ -189,12 +189,11 @@ impl NewIndex {
     }
 
     /// Compile a new index for a given space vector model
-    pub fn build<E, D, T, U, FV>(&self, unique_terms: T, mut calc_vecs: FV) -> Result<()>
+    pub fn build<E, D, T, FV>(&self, unique_terms: T, mut calc_vecs: FV) -> Result<()>
     where
         E: Encodable + Clone,
         D: Decodable + Clone,
-        T: Iterator<Item = U>,
-        U: AsRef<str>,
+        T: Iterator<Item = IndexItem>,
         FV: FnMut(&TermIndexer) -> Vec<DocumentVector<E>>,
     {
         let mut index_builder = IndexBuilder::new(&self.output)?;
@@ -210,26 +209,3 @@ impl NewIndex {
         Ok(())
     }
 }
-
-/*
-/// Generate search indices for all languages
-pub fn generate_all_langs(path: &str, version: IndexVersion) -> Result<()> {
-    let langs = [
-        Language::German,
-        Language::English,
-        Language::Dutch,
-        Language::French,
-        Language::Russain,
-        Language::Spanish,
-        Language::Swedish,
-        Language::Hungarian,
-        Language::Slovenian,
-    ];
-
-    for lang in langs {
-        generate_new(path, version, lang)?;
-    }
-
-    Ok(())
-}
-*/
