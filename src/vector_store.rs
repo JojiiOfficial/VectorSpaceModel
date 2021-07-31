@@ -237,7 +237,7 @@ where
 
     DimVecMap::new(dim_vec_map).build(index_builder)?;
 
-    let index = Arc::new(FileIndex::new(file_index));
+    let index = Arc::new(FileIndex::new(file_index).zero_len());
     let mut indexed_vectors = IndexedReader::new_custom(encoded_vectors, index);
 
     let mut out = Vec::new();
