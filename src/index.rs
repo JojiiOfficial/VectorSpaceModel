@@ -11,7 +11,7 @@ use crate::{
     dim_map::{self, DimVecMap},
     document_vector::DocumentVector,
     error::Error,
-    metadata::{self, IndexVersion, Metadata},
+    metadata::{self, Metadata, MetadataBuild},
     term_indexer::{self, IndexItem, TermIndexer},
     traits::{Decodable, Encodable},
     vector_store::{self, VectorStore},
@@ -20,15 +20,15 @@ use crate::{
 type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, Clone)]
-pub struct Index<D: Decodable + Clone> {
-    metadata: Metadata,
+pub struct Index<D: Decodable + Clone, M: Metadata> {
+    metadata: M,
     indexer: TermIndexer,
     vector_store: VectorStore<D>,
 }
 
-impl<D: Decodable + Clone> Index<D> {
+impl<D: Decodable + Clone, M: Metadata> Index<D, M> {
     /// Opens an Index from a tar.gz file and returns a new `Index`
-    pub fn open<P: AsRef<Path>>(file: P) -> Result<Index<D>> {
+    pub fn open<P: AsRef<Path>>(file: P) -> Result<Index<D, M>> {
         Self::from_archive(file)
     }
 
@@ -46,18 +46,18 @@ impl<D: Decodable + Clone> Index<D> {
 
     /// Returns the indexes metadata
     #[inline]
-    pub fn get_metadata(&self) -> &Metadata {
+    pub fn get_metadata(&self) -> &M {
         &self.metadata
     }
 
     /// Read an index-archive and build an `Index` out of it
-    fn from_archive<P: AsRef<Path>>(file: P) -> Result<Index<D>> {
+    fn from_archive<P: AsRef<Path>>(file: P) -> Result<Index<D, M>> {
         let file = BufReader::new(File::open(file)?);
         let mut archive = tar::Archive::new(GzDecoder::new(file));
 
         // We have to read the archives files in the same order as archives.entries() yields
         // the elements
-        let mut metadata: Option<Metadata> = None;
+        let mut metadata: Option<M> = None;
         let mut term_indexer: Option<TermIndexer> = None;
         let mut dim_map: Option<DimVecMap> = None;
         let mut vector_store: Option<VectorStore<D>> = None;
@@ -85,7 +85,7 @@ impl<D: Decodable + Clone> Index<D> {
         let mut vector_store = vector_store.ok_or(Error::InvalidIndex)?;
 
         vector_store.set_dim_map(dim_map);
-        term_indexer.set_total_documents(metadata.document_count);
+        term_indexer.set_total_documents(metadata.get_document_count());
 
         Ok(Self {
             metadata,
@@ -110,8 +110,8 @@ impl<D: Decodable + Clone> Index<D> {
         DimVecMap::load(entry).map_err(|_| Error::InvalidIndex)
     }
 
-    fn parse_metadata<T: Read>(entry: Entry<T>) -> Result<Metadata> {
-        Metadata::load(entry).map_err(|_| Error::InvalidIndex)
+    fn parse_metadata<T: Read>(entry: Entry<T>) -> Result<M> {
+        M::load(entry).map_err(|_| Error::InvalidIndex)
     }
 }
 
@@ -170,31 +170,31 @@ impl IndexBuilder {
 /// Public API for generating new index files
 pub struct NewIndex {
     output: String,
-    index_version: IndexVersion,
     doc_count: usize,
 }
 
 impl NewIndex {
     /// Constructs a new `NewIndex`
-    pub fn new<S: AsRef<str>>(
-        output: S,
-        index_version: IndexVersion,
-        doc_count: usize,
-    ) -> NewIndex {
+    pub fn new<S: AsRef<str>>(output: S, doc_count: usize) -> NewIndex {
         Self {
             output: output.as_ref().to_string(),
-            index_version,
             doc_count,
         }
     }
 
     /// Compile a new index for a given space vector model
-    pub fn build<E, D, T, FV>(&self, unique_terms: T, mut calc_vecs: FV) -> Result<()>
+    pub fn build<E, D, T, FV, M>(
+        &self,
+        unique_terms: T,
+        metadata: M,
+        mut calc_vecs: FV,
+    ) -> Result<()>
     where
         E: Encodable + Clone,
         D: Decodable + Clone,
         T: Iterator<Item = IndexItem>,
         FV: FnMut(&TermIndexer) -> Vec<DocumentVector<E>>,
+        M: Metadata,
     {
         let mut index_builder = IndexBuilder::new(&self.output)?;
 
@@ -202,7 +202,7 @@ impl NewIndex {
 
         vector_store::build(&mut index_builder, calc_vecs(&term_indexer).into_iter())?;
 
-        Metadata::new(self.index_version, self.doc_count).build(&mut index_builder)?;
+        metadata.build(&mut index_builder)?;
 
         index_builder.finish()?;
 

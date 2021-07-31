@@ -39,31 +39,25 @@ impl TryFrom<u8> for IndexVersion {
     }
 }
 
-/// Various metadata for the given Index
-#[derive(Debug, Clone, Copy, Default)]
-pub struct Metadata {
-    pub version: IndexVersion,
-    pub document_count: usize,
-}
-
-impl Metadata {
-    /// Creates a new `Metadata` with the given values
-    pub fn new(version: IndexVersion, document_count: usize) -> Self {
-        Self {
-            version,
-            document_count,
-        }
-    }
+/// Defines required functions of a metadata type. All types implementing this trait can be used as
+/// metadata and will be included in the the index
+pub trait Metadata: Encodable + Decodable {
+    fn get_version(&self) -> IndexVersion;
+    fn get_document_count(&self) -> usize;
 
     /// Loads an existing Metadata file
-    pub fn load<R: Read>(mut reader: R) -> Result<Metadata, Error> {
+    fn load<R: Read>(mut reader: R) -> Result<Self, Error> {
         let mut buf = vec![];
         reader.read_to_end(&mut buf)?;
         Self::decode::<LittleEndian, _>(Cursor::new(buf))
     }
+}
 
+/// Internal behavior for creating new indexes. This should not be overwritten and is only public
+/// within this crate.
+pub(crate) trait MetadataBuild: Metadata {
     /// Builds a new Metadata file
-    pub(crate) fn build(&self, index_builder: &mut IndexBuilder) -> Result<(), Error> {
+    fn build(&self, index_builder: &mut IndexBuilder) -> Result<(), Error> {
         let mut out = Vec::new();
         out.write_all(&self.encode::<LittleEndian>()?)?;
         index_builder.write_metadata(&out)?;
@@ -71,7 +65,36 @@ impl Metadata {
     }
 }
 
-impl Encodable for Metadata {
+impl<T: Metadata> MetadataBuild for T {}
+
+/// Various metadata for the given Index
+#[derive(Debug, Clone, Copy, Default)]
+pub struct DefaultMetadata {
+    pub version: IndexVersion,
+    pub document_count: usize,
+}
+
+impl DefaultMetadata {
+    /// Creates a new `Metadata` with the given values
+    pub fn new(version: IndexVersion, document_count: usize) -> Self {
+        Self {
+            version,
+            document_count,
+        }
+    }
+}
+
+impl Metadata for DefaultMetadata {
+    fn get_version(&self) -> IndexVersion {
+        self.version
+    }
+
+    fn get_document_count(&self) -> usize {
+        self.document_count
+    }
+}
+
+impl Encodable for DefaultMetadata {
     fn encode<T: ByteOrder>(&self) -> Result<Vec<u8>, Error> {
         let mut out = vec![];
 
@@ -82,7 +105,7 @@ impl Encodable for Metadata {
     }
 }
 
-impl Decodable for Metadata {
+impl Decodable for DefaultMetadata {
     fn decode<T: ByteOrder, R: Read>(mut data: R) -> Result<Self, Error> {
         let version = IndexVersion::try_from(data.read_u8()?)?;
         let document_count = data.read_u64::<T>()? as usize;

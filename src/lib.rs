@@ -10,5 +10,5 @@ pub mod vector_store;
 pub use document_vector::{Document, DocumentVector, Indexable, Vector};
 pub use error::Error;
 pub use index::{Index, NewIndex};
-pub use metadata::Metadata;
+pub use metadata::DefaultMetadata;
 pub use vector_store::VectorStore;
