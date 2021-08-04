@@ -19,7 +19,7 @@ use crate::{document_vector, error::Error, index::IndexBuilder, traits::Encodabl
 /// vectors being calculated.
 #[derive(Debug, Clone)]
 pub struct TermIndexer {
-    index: IndexedReader<Vec<u8>>,
+    pub index: IndexedReader<Vec<u8>>,
     tot_documents: usize,
 }
 
@@ -95,8 +95,11 @@ impl TermIndexer {
         let mut index = Vec::new();
         let mut text = Vec::new();
 
+        let mut terms = terms.collect::<Vec<_>>();
+        terms.sort_by(|a, b| a.text.cmp(&b.text));
+
         for term in terms {
-            index.push(text.len() as u64);
+            index.push(text.len() as u32);
             text.extend(term.encode::<LittleEndian>()?);
         }
 
@@ -140,7 +143,7 @@ impl TermIndexer {
         self.tot_documents = tot_documents;
     }
 
-    fn binary_search(index: &mut IndexedReader<Vec<u8>>, query: &str) -> Option<usize> {
+    pub fn binary_search(index: &mut IndexedReader<Vec<u8>>, query: &str) -> Option<usize> {
         index
             .binary_search_raw_by(|i| {
                 let item = IndexItem::decode(&i).unwrap();
@@ -152,23 +155,7 @@ impl TermIndexer {
 
 impl document_vector::Indexable for TermIndexer {
     fn index(&self, part: &str) -> Option<usize> {
-        // We can clone here since IndexedString's clone is very light
-        let mut index = self.index.clone();
-
-        let mut query = part;
-        loop {
-            if let Some(index) = Self::binary_search(&mut index, query) {
-                break Some(index);
-            }
-
-            // Only go down to 3
-            if query.len() <= 3 {
-                break None;
-            }
-
-            // Remove last character
-            query = &query[..query.char_indices().rev().nth(1).unwrap().0];
-        }
+        Self::binary_search(&mut self.index.clone(), part)
     }
 
     #[inline]

@@ -17,7 +17,7 @@ use indexed_file::{
 };
 
 use crate::{
-    dim_map::{DimToVecs, DimVecMap},
+    dim_map::{DimToVecs, DimVecMap, NewDimVecMap},
     document_vector::DocumentVector,
     error::Error,
     index::IndexBuilder,
@@ -31,7 +31,7 @@ pub(crate) const FILE_NAME: &str = "vectors";
 #[derive(Debug, Clone)]
 pub struct VectorStore<D: Decodable + Clone> {
     store: IndexedReader<Vec<u8>>,
-    map: Arc<DimVecMap>,
+    map: Option<Arc<DimVecMap>>,
     vec_type: PhantomData<D>,
 }
 
@@ -55,7 +55,7 @@ impl<D: Decodable + Clone> VectorStore<D> {
 
         Ok(Self {
             store: data,
-            map: Arc::new(DimVecMap::default()),
+            map: None,
             vec_type: PhantomData,
         })
     }
@@ -63,19 +63,24 @@ impl<D: Decodable + Clone> VectorStore<D> {
     /// Set the dim_vec_map to `map`
     #[inline(always)]
     pub fn set_dim_map(&mut self, map: DimVecMap) {
-        self.map = Arc::new(map);
+        self.map = Some(Arc::new(map));
+    }
+
+    #[inline(always)]
+    pub fn get_map(&self) -> &Arc<DimVecMap> {
+        self.map.as_ref().expect("set_dim_map was not called")
     }
 
     /// Return the size of the given dimension. The size represents the amount of vectors which are
     /// laying in the dimension.
     #[inline]
     pub fn dimension_size(&self, dimension: u32) -> usize {
-        self.map.get(dimension).map(|i| i.len()).unwrap_or(0)
+        self.get_map().get(dimension).map(|i| i.len()).unwrap_or(0)
     }
 
     /// Returns all vectors in `dimension`
     pub fn get(&mut self, dimension: u32) -> Option<Vec<DocumentVector<D>>> {
-        let vec_refs = self.map.get(dimension)?.clone();
+        let vec_refs = self.get_map().get(dimension)?.clone();
         Some(self.load_documents(&vec_refs))
     }
 
@@ -86,12 +91,11 @@ impl<D: Decodable + Clone> VectorStore<D> {
     }
 
     /// Returns all unique vector references laying in `dimensions`
-    fn vectors_in_dimensions(&mut self, dimensions: &[u32]) -> Vec<usize> {
+    fn vectors_in_dimensions(&mut self, dimensions: &[u32]) -> Vec<u32> {
         let mut vec_refs: Vec<_> = dimensions
             .iter()
-            .filter_map(|i| self.map.get(*i))
+            .filter_map(|i| self.get_map().get(*i))
             .flatten()
-            .copied()
             .collect();
 
         vec_refs.sort_unstable();
@@ -102,10 +106,10 @@ impl<D: Decodable + Clone> VectorStore<D> {
 
     /// Load all documents by their ids
     #[inline(always)]
-    fn load_documents(&mut self, vec_ids: &[usize]) -> Vec<DocumentVector<D>> {
+    fn load_documents(&mut self, vec_ids: &[u32]) -> Vec<DocumentVector<D>> {
         vec_ids
             .iter()
-            .map(|i| self.load_vector(*i).expect("invalid index format"))
+            .map(|i| self.load_vector(*i as usize).expect("invalid index format"))
             .collect::<Vec<_>>()
     }
 
@@ -121,7 +125,7 @@ impl<D: Decodable + Clone> VectorStore<D> {
 impl<D: Decodable + Clone + Unpin> VectorStore<D> {
     /// Returns all vectors in `dimension`
     pub async fn get_async(&mut self, dimension: u32) -> Result<Vec<DocumentVector<D>>, Error> {
-        let vec_refs = self.map.get(dimension).cloned().unwrap_or_default();
+        let vec_refs = self.get_map().get(dimension).unwrap_or_default();
         self.load_vecs_async(vec_refs).await
     }
 
@@ -135,7 +139,7 @@ impl<D: Decodable + Clone + Unpin> VectorStore<D> {
     }
 
     /// Loads all vectors by their references
-    async fn load_vecs_async(&self, vec_refs: Vec<usize>) -> Result<Vec<DocumentVector<D>>, Error> {
+    async fn load_vecs_async(&self, vec_refs: Vec<u32>) -> Result<Vec<DocumentVector<D>>, Error> {
         if vec_refs.is_empty() {
             return Ok(vec![]);
         }
@@ -146,7 +150,7 @@ impl<D: Decodable + Clone + Unpin> VectorStore<D> {
 
 /// Load document vectors asynchronously by chunking the load process into small pieces
 struct AsyncDocRetrieval<D: Decodable + Clone + Unpin> {
-    vec_refs: Vec<usize>,
+    vec_refs: Vec<u32>,
     store: IndexedReader<Vec<u8>>,
     vec_type: PhantomData<D>,
     out: Vec<DocumentVector<D>>,
@@ -155,7 +159,7 @@ struct AsyncDocRetrieval<D: Decodable + Clone + Unpin> {
 
 impl<D: Decodable + Clone + Unpin> AsyncDocRetrieval<D> {
     #[inline(always)]
-    fn new(vec_refs: Vec<usize>, store: IndexedReader<Vec<u8>>) -> Self {
+    fn new(vec_refs: Vec<u32>, store: IndexedReader<Vec<u8>>) -> Self {
         Self {
             // output
             out: Vec::with_capacity(vec_refs.len()),
@@ -185,7 +189,7 @@ impl<D: Decodable + Clone + Unpin> Future for AsyncDocRetrieval<D> {
 
         for vec_pos in start..end {
             let vec_id = self.vec_refs[vec_pos];
-            if let Err(err) = self.store.read_line_raw(vec_id, &mut buf) {
+            if let Err(err) = self.store.read_line_raw(vec_id as usize, &mut buf) {
                 return Poll::Ready(Err(err.into()));
             }
 
@@ -220,21 +224,21 @@ where
     let mut dim_vec_map: DimToVecs = HashMap::new();
 
     // Index position for each vector
-    let mut file_index: Vec<u64> = Vec::new();
+    let mut file_index: Vec<u32> = Vec::new();
 
     for (pos, vector) in vectors.enumerate() {
         // Bulid map from dimension to all vectors in this dimension
         for dim in vector.vector().vec_indices() {
-            dim_vec_map.entry(dim).or_default().push(pos);
+            dim_vec_map.entry(dim).or_default().push(pos as u32);
         }
 
-        file_index.push(encoded_vectors.len() as u64);
+        file_index.push(encoded_vectors.len() as u32);
 
         // Encode document vector and push as new line to encoded_documents
         encoded_vectors.extend(&vector.encode::<LittleEndian>()?);
     }
 
-    DimVecMap::new(dim_vec_map).build(index_builder)?;
+    NewDimVecMap::new(dim_vec_map).build(index_builder)?;
 
     let index = Arc::new(FileIndex::new(file_index).zero_len());
     let mut indexed_vectors = IndexedReader::new_custom(encoded_vectors, index);

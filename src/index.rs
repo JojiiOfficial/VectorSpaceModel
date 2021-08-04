@@ -106,8 +106,10 @@ impl<D: Decodable + Clone, M: Metadata> Index<D, M> {
         TermIndexer::new(Cursor::new(data)).map_err(|_| Error::InvalidIndex)
     }
 
-    fn parse_dim_map<R: Read>(entry: Entry<R>) -> Result<DimVecMap> {
-        DimVecMap::load(entry).map_err(|_| Error::InvalidIndex)
+    fn parse_dim_map<R: Read>(mut entry: Entry<R>) -> Result<DimVecMap> {
+        let mut data = Vec::new();
+        entry.read_to_end(&mut data)?;
+        DimVecMap::load(Cursor::new(data)).map_err(|_| Error::InvalidIndex)
     }
 
     fn parse_metadata<T: Read>(entry: Entry<T>) -> Result<M> {
