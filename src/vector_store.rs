@@ -36,9 +36,10 @@ pub struct VectorStore<D: Decodable + Clone> {
 }
 
 impl<D: Decodable + Clone> VectorStore<D> {
-    /// Builds data for a new DocumentStore. This contains all generated vectors. The `map` gets
-    /// initialized with `DimVecMap::default()` and hast to be set afterwards using
-    /// `vec_store.set_dim_map(..)`
+    /// Builds data for a new DocumentStore. This contains all generated vectors.
+    ///
+    /// The `map` gets initialized with `None` and hast to be set afterwards using
+    /// `vec_store.set_dim_map(..)`. Otherwise VectorStore will panic
     pub fn new<R: Read + Seek + Unpin>(reader: R) -> Result<Self, Error> {
         let mut buf_read = BufReader::new(reader);
 

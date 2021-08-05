@@ -12,6 +12,7 @@ keywords = ["vector-space-model", "information-retrieval", "information", "retri
 
 [dependencies]
 indexed_file = { git = "https://github.com/JojiiOfficial/IndexedFile" }
+compressed_vec = { git = "https://github.com/JojiiOfficial/CompressedVec" }
 byteorder = "1.4.3"
 tar = "0.4.35"
 flate2 = "1.0.20"
