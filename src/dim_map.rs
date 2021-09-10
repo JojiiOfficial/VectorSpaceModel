@@ -5,10 +5,7 @@ use std::{
 };
 
 use byteorder::LittleEndian;
-use compressed_vec::{
-    buffered::{BufCVecRef, BufferedCVec},
-    CVec,
-};
+use compressed_vec::{buffered::BufCVecRef, CVec};
 
 use crate::{error::Error, index::IndexBuilder, traits::Encodable};
 use indexed_file::{any::IndexedReader, index::Header as IndexHeader, index::Index, IndexableFile};
@@ -67,7 +64,7 @@ impl DimVecMap {
             return None;
         }
 
-        let mut out = Vec::new();
+        let mut out = Vec::with_capacity(arr_len);
 
         // Take all elements of array. `arr_len` contains the count of all items in the array
         for pos in (arr_start + 1)..(arr_start + 1 + arr_len) {

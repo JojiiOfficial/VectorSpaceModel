@@ -12,8 +12,8 @@ use std::{
 
 use byteorder::LittleEndian;
 use indexed_file::{
-    any::IndexedReader, index::Header as IndexHeader, index::Index as FileIndex, IndexableFile,
-    ReadByLine,
+    any::IndexedReader, index::Header as IndexHeader, index::Index as FileIndex, Indexable,
+    IndexableFile, ReadByLine,
 };
 
 use crate::{
@@ -65,6 +65,12 @@ impl<D: Decodable + Clone> VectorStore<D> {
     #[inline(always)]
     pub fn set_dim_map(&mut self, map: DimVecMap) {
         self.map = Some(Arc::new(map));
+    }
+
+    /// Get the amount of vectors in the `VectorStore`
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.store.total_lines()
     }
 
     #[inline(always)]

@@ -23,6 +23,7 @@ pub trait Indexable {
     fn index_size(&self) -> usize;
     fn document_count(&self) -> usize;
 
+    #[inline]
     fn word_occurrence(&self, _term: &str) -> Option<usize> {
         None
     }
@@ -36,6 +37,7 @@ pub struct DocumentVector<D> {
 }
 
 impl<D: Document> DocumentVector<D> {
+    #[inline]
     pub fn new<V: Indexable>(index: &V, document: D) -> Option<Self> {
         let vec = Vector::new(index, &document)?;
         Some(Self { document, vec })
@@ -92,18 +94,21 @@ impl<D> DocumentVector<D> {
 }
 
 impl<D: Eq> Ord for DocumentVector<D> {
+    #[inline]
     fn cmp(&self, other: &Self) -> Ordering {
         self.vec.cmp(&other.vec)
     }
 }
 
 impl<D> PartialOrd for DocumentVector<D> {
+    #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.vec.partial_cmp(&other.vec)
     }
 }
 
 impl<D> PartialEq for DocumentVector<D> {
+    #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.vec.eq(&other.vec)
     }
@@ -284,6 +289,7 @@ impl Vector {
     }
 
     /// Update the vector values
+    #[inline]
     pub fn update(&mut self) {
         // Calculate new vector length
         self.length = self.calc_len();
@@ -324,6 +330,7 @@ impl Vector {
     }
 
     /// Deletes a given dimension and its value from the vector
+    #[inline]
     fn delete_dim(&mut self, dim: u32) {
         self.inner.retain(|(curr_dim, _)| *curr_dim == dim);
     }
@@ -336,6 +343,7 @@ impl Vector {
     }
 
     /// Calculate the vector length
+    #[inline]
     fn calc_len(&self) -> f32 {
         self.inner
             .iter()
@@ -345,6 +353,7 @@ impl Vector {
     }
 
     /// Sort the Vec<> by the dimensions
+    #[inline]
     fn sort(&mut self) {
         self.inner.sort_by(|a, b| a.0.cmp(&b.0));
         self.inner.dedup_by(|a, b| a.0 == b.0);
@@ -362,19 +371,26 @@ impl Vector {
 }
 
 fn weight<D: Document, I: Indexable>(term: &str, index: &I, document: Option<&D>) -> f32 {
-    let tf = match document {
-        Some(d) => occurences(term, d) as f32,
-        None => 1f32,
-    };
+    let tf = document.map(|d| occurences(term, d) as f32).unwrap_or(1f32)/*.log10();*/;
 
+    idf(index, term)
+        .map(|idf| {
+            let idf = if idf > 1f32 { 2.5 } else { 0.3f32 };
+            (tf + 1f32) * idf
+        })
+        .unwrap_or_else(|| {
+            tf // + 1f32
+        })
+
+    /*
     if let Some(idf) = idf(index, term) {
         // Adjust idf to not have that much of a difference between non stop-words
         let idf = if idf > 1f32 { 2.5 } else { 0.3f32 };
-
-        (tf.log10() + 1f32) * idf
+        (tf + 1f32) * idf
     } else {
-        tf.log10() + 1f32
+        tf + 1f32
     }
+    */
 }
 
 fn idf<I: Indexable>(index: &I, term: &str) -> Option<f32> {
@@ -386,24 +402,30 @@ fn occurences<D: Document>(term: &str, document: &D) -> usize {
 }
 
 impl PartialEq for Vector {
+    #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.inner == other.inner
     }
 }
 
 impl Eq for Vector {
+    #[inline]
     fn assert_receiver_is_total_eq(&self) {}
 }
 
 impl PartialOrd for Vector {
+    #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.inner.partial_cmp(&other.inner)
     }
 }
 
 impl Ord for Vector {
+    #[inline]
     fn cmp(&self, other: &Self) -> Ordering {
-        self.inner.partial_cmp(&other.inner).unwrap()
+        self.inner
+            .partial_cmp(&other.inner)
+            .unwrap_or(Ordering::Equal)
     }
 }
 
@@ -421,6 +443,7 @@ where
     A: Iterator<Item = (K, V)>,
     B: Iterator<Item = (K, W)>,
 {
+    #[inline]
     pub fn new(a: A, b: B) -> Self {
         Self {
             a: a.peekable(),
