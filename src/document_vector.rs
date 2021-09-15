@@ -171,12 +171,24 @@ pub struct Vector {
 
 impl Vector {
     /// Creates a new word vector from a Document using an index
+    #[inline]
     pub fn new<V: Indexable, D: Document>(index: &V, document: &D) -> Option<Self> {
+        Self::new_with_weight(index, document, default_weight)
+    }
+
+    /// Creates a new word vector from a Document using an index and a custom weight modifier
+    pub fn new_with_weight<W, V, D>(index: &V, document: &D, weight_mod: W) -> Option<Self>
+    where
+        // TF, IDF -> f32
+        W: Fn(f32, Option<f32>) -> f32 + Copy,
+        V: Indexable,
+        D: Document,
+    {
         let inner: Vec<(u32, f32)> = document
             .get_terms()
             .into_iter()
             .filter_map(|term| {
-                let weight = weight(&term, index, Some(document));
+                let weight = cust_weight(&term, index, Some(document), weight_mod);
                 let index = index.index(&term)? as u32;
                 (weight != 0_f32).then(|| (index, weight))
             })
@@ -370,27 +382,27 @@ impl Vector {
     }
 }
 
+#[inline]
+fn default_weight(tf: f32, idf: Option<f32>) -> f32 {
+    idf.map(|idf| tf * idf).unwrap_or(tf)
+}
+
+//let idf = if idf > 1f32 { 2.5 } else { 0.3f32 };
+#[inline]
 fn weight<D: Document, I: Indexable>(term: &str, index: &I, document: Option<&D>) -> f32 {
+    cust_weight(term, index, document, |tf, idf| default_weight(tf, idf))
+}
+
+fn cust_weight<W, D, I>(term: &str, index: &I, document: Option<&D>, weight_mod: W) -> f32
+where
+    // TF, IDF -> f32
+    W: Fn(f32, Option<f32>) -> f32 + Copy,
+    D: Document,
+    I: Indexable,
+{
     let tf = document.map(|d| occurences(term, d) as f32).unwrap_or(1f32)/*.log10();*/;
-
-    idf(index, term)
-        .map(|idf| {
-            let idf = if idf > 1f32 { 2.5 } else { 0.3f32 };
-            (tf + 1f32) * idf
-        })
-        .unwrap_or_else(|| {
-            tf // + 1f32
-        })
-
-    /*
-    if let Some(idf) = idf(index, term) {
-        // Adjust idf to not have that much of a difference between non stop-words
-        let idf = if idf > 1f32 { 2.5 } else { 0.3f32 };
-        (tf + 1f32) * idf
-    } else {
-        tf + 1f32
-    }
-    */
+    let idf = idf(index, term);
+    weight_mod(tf, idf)
 }
 
 fn idf<I: Indexable>(index: &I, term: &str) -> Option<f32> {

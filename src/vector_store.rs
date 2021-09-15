@@ -73,6 +73,14 @@ impl<D: Decodable + Clone> VectorStore<D> {
         self.store.total_lines()
     }
 
+    pub fn vector_iter(&self) -> impl Iterator<Item = DocumentVector<D>> + '_ {
+        let mut pos = 0;
+        std::iter::from_fn(move || {
+            pos += 1;
+            self.clone().load_vector(pos - 1).ok().to_owned()
+        })
+    }
+
     #[inline(always)]
     pub fn get_map(&self) -> &Arc<DimVecMap> {
         self.map.as_ref().expect("set_dim_map was not called")
