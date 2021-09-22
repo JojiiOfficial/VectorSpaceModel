@@ -19,7 +19,7 @@ use crate::{
 
 type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Index<D: Decodable + Clone, M: Metadata> {
     metadata: M,
     indexer: TermIndexer,

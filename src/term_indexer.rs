@@ -7,6 +7,7 @@ use std::{
 /// File name in the index tar
 pub(crate) const FILE_NAME: &str = "term_indexer";
 
+use bktree::BkTree;
 use byteorder::{LittleEndian, WriteBytesExt};
 use indexed_file::{
     any::IndexedReader, index::Header as IndexHeader, index::Index as FileIndex, Indexable,
@@ -17,7 +18,7 @@ use crate::{document_vector, error::Error, index::IndexBuilder, traits::Encodabl
 
 /// An in memory TermIndexer that allows efficient indexing of terms which is requried for document
 /// vectors being calculated.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct TermIndexer {
     pub index: IndexedReader<Vec<u8>>,
     tot_documents: usize,
@@ -83,6 +84,19 @@ impl TermIndexer {
         })
     }
 
+    /// Generates a BkTree of all terms within the term-index
+    pub fn gen_term_tree(mut index: IndexedReader<Vec<u8>>) -> BkTree<String> {
+        let mut terms = Vec::with_capacity(index.total_lines());
+        for i in 0..index.total_lines() {
+            let mut buf = Vec::with_capacity(6);
+            index.read_line_raw(i, &mut buf).unwrap();
+            let index_item = IndexItem::decode(&buf).ok().unwrap();
+            terms.push(index_item.text);
+        }
+
+        terms.into_iter().collect::<BkTree<_>>()
+    }
+
     /// Build a new term indexer for language `lang` using JMdict.
     pub(crate) fn build<T>(
         index_builder: &mut IndexBuilder,
@@ -139,6 +153,7 @@ impl TermIndexer {
     }
 
     /// Sets the total amount of documents in the index. This is required for better indexing
+    #[inline]
     pub(crate) fn set_total_documents(&mut self, tot_documents: usize) {
         self.tot_documents = tot_documents;
     }
@@ -154,6 +169,7 @@ impl TermIndexer {
 }
 
 impl document_vector::Indexable for TermIndexer {
+    #[inline]
     fn index(&self, part: &str) -> Option<usize> {
         Self::binary_search(&mut self.index.clone(), part)
     }
