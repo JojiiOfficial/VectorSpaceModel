@@ -85,7 +85,8 @@ impl TermIndexer {
     }
 
     /// Generates a BkTree of all terms within the term-index
-    pub fn gen_term_tree(mut index: IndexedReader<Vec<u8>>) -> BkTree<String> {
+    pub fn gen_term_tree(mut self) -> BkTree<String> {
+        let mut index = self.index;
         let mut terms = Vec::with_capacity(index.total_lines());
         for i in 0..index.total_lines() {
             let mut buf = Vec::with_capacity(6);
