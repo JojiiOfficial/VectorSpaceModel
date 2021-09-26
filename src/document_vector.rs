@@ -1,5 +1,6 @@
 use std::{
     cmp::Ordering,
+    hash::Hash,
     io::{Read, Write},
     iter::Peekable,
 };
@@ -93,24 +94,31 @@ impl<D> DocumentVector<D> {
     }
 }
 
-impl<D: Eq> Ord for DocumentVector<D> {
+impl<D: Hash> Hash for DocumentVector<D> {
+    #[inline]
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.document.hash(state);
+    }
+}
+
+impl<D: Ord> Ord for DocumentVector<D> {
     #[inline]
     fn cmp(&self, other: &Self) -> Ordering {
-        self.vec.cmp(&other.vec)
+        self.document.cmp(&other.document)
     }
 }
 
-impl<D> PartialOrd for DocumentVector<D> {
+impl<D: PartialOrd> PartialOrd for DocumentVector<D> {
     #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.vec.partial_cmp(&other.vec)
+        self.document.partial_cmp(&other.document)
     }
 }
 
-impl<D> PartialEq for DocumentVector<D> {
+impl<D: PartialEq> PartialEq for DocumentVector<D> {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
-        self.vec.eq(&other.vec)
+        self.document.eq(&other.document)
     }
 }
 
