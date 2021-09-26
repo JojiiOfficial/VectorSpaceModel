@@ -105,6 +105,25 @@ impl<D: Decodable + Clone> VectorStore<D> {
         Some(self.load_documents(&vec_refs))
     }
 
+    /// Returns all vectors in given dimensions efficiently via an iterator
+    #[inline]
+    pub fn get_all_iter<'a>(
+        &'a mut self,
+        dimensions: &[u32],
+    ) -> impl Iterator<Item = DocumentVector<D>> + 'a {
+        let vec_refs = self.vectors_in_dimensions(dimensions);
+        self.load_documents_iter(vec_refs.into_iter())
+    }
+
+    /// Load all documents by their ids
+    #[inline]
+    fn load_documents_iter<'a>(
+        &'a mut self,
+        vec_ids: impl Iterator<Item = u32> + 'a,
+    ) -> impl Iterator<Item = DocumentVector<D>> + 'a {
+        vec_ids.map(move |i| self.load_vector(i as usize).expect("invalid index format"))
+    }
+
     /// Returns all unique vector references laying in `dimensions`
     fn vectors_in_dimensions(&mut self, dimensions: &[u32]) -> Vec<u32> {
         let mut vec_refs: Vec<_> = dimensions
