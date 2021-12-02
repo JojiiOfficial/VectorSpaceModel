@@ -13,7 +13,7 @@ use crate::{
 };
 
 /// Representing a document which can be indexed
-pub trait Document: Ord + Eq {
+pub trait Document {
     fn get_terms(&self) -> Vec<String>;
 }
 
