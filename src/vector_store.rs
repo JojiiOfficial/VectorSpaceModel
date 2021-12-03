@@ -100,6 +100,7 @@ impl<D: Decodable + Clone> VectorStore<D> {
     }
 
     /// Returns all vectors in given dimensions efficiently
+    #[deprecated(since = "0.1.0", note = "please use `get_all_iter` instead")]
     pub fn get_all(&mut self, dimensions: &[u32]) -> Option<Vec<DocumentVector<D>>> {
         let vec_refs = self.vectors_in_dimensions(dimensions);
         Some(self.load_documents(&vec_refs))
