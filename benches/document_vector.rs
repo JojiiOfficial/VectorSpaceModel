@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use vector_space_model::document_vector::Vector;
+use vector_space_model::vector::Vector;
 
 fn get_word_vector(size: usize, seed: usize) -> Vector {
     let values = (seed / size % 10..)

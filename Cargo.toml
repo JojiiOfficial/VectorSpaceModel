@@ -15,9 +15,7 @@ indexed_file = { git = "https://github.com/JojiiOfficial/IndexedFile" }
 compressed_vec = { git = "https://github.com/JojiiOfficial/CompressedVec" }
 byteorder = "1.4.3"
 tar = "0.4.38"
-flate2 = "1.0.22"
-bktree = { git = "https://github.com/JojiiOfficial/bktree"}
-serde = {version = "*", features = ["derive"]}
+flate2 = "1.0.23"
 
 [dev-dependencies]
 criterion = "0.3.5"

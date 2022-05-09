@@ -12,7 +12,7 @@ use crate::{
     document_vector::DocumentVector,
     error::Error,
     metadata::{self, Metadata, MetadataBuild},
-    term_indexer::{self, IndexItem, TermIndexer},
+    term_store::{self, item::IndexItem, TermIndexer},
     traits::{Decodable, Encodable},
     vector_store::{self, VectorStore},
 };
@@ -72,7 +72,7 @@ impl<D: Decodable + Clone, M: Metadata> Index<D, M> {
 
             match name.as_str() {
                 metadata::FILE_NAME => metadata = Some(Self::parse_metadata(entry)?),
-                term_indexer::FILE_NAME => term_indexer = Some(Self::parse_indexer(entry)?),
+                term_store::FILE_NAME => term_indexer = Some(Self::parse_indexer(entry)?),
                 dim_map::FILE_NAME => dim_map = Some(Self::parse_dim_map(entry)?),
                 vector_store::FILE_NAME => vector_store = Some(Self::parse_vector_store(entry)?),
                 _ => (),
@@ -138,7 +138,7 @@ impl IndexBuilder {
     }
 
     pub fn write_term_indexer(&mut self, data: &[u8]) -> Result<()> {
-        self.append_file(term_indexer::FILE_NAME, data)?;
+        self.append_file(term_store::FILE_NAME, data)?;
         Ok(())
     }
 

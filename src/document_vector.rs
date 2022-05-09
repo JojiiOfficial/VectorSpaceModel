@@ -2,15 +2,14 @@ use std::{
     cmp::Ordering,
     hash::Hash,
     io::{Read, Write},
-    iter::Peekable,
 };
 
 use byteorder::{ByteOrder, ReadBytesExt, WriteBytesExt};
-use serde::{Deserialize, Serialize};
 
 use crate::{
     error::Error,
     traits::{Decodable, Encodable},
+    vector::Vector,
 };
 
 /// Representing a document which can be indexed
@@ -38,43 +37,9 @@ pub struct DocumentVector<D> {
     vec: Vector,
 }
 
-impl<D: Document> DocumentVector<D> {
-    #[inline]
-    pub fn new<V: Indexable>(index: &V, document: D) -> Option<Self> {
-        let vec = Vector::new(index, &document)?;
-        Some(Self { document, vec })
-    }
-
-    /// Adds multiple terms to the word vector. This function should be preferred over `add_term`
-    /// if you have more than one term you want to add to a vector
-    pub fn add_terms<I: Indexable, T: AsRef<str>>(
-        &mut self,
-        index: &I,
-        terms: &[T],
-        skip_existing: bool,
-        weight_mult: Option<f32>,
-    ) {
-        self.vec
-            .add_terms::<D, _, T>(index, terms, skip_existing, weight_mult)
-    }
-
-    /// Adds a term to the word vector. Shouldn't be called from a loop. If you have to add
-    /// multiple terms, use `add_terms`
-    pub fn add_term<I: Indexable>(
-        &mut self,
-        index: &I,
-        term: &str,
-        skip_existing: bool,
-        weight_mult: Option<f32>,
-    ) {
-        self.vec
-            .add_term::<D, _>(index, term, skip_existing, weight_mult)
-    }
-}
-
 impl<D> DocumentVector<D> {
     /// Create a new DocumentVector from a document and its vector
-    #[inline]
+    #[inline(always)]
     pub fn new_from_vector(document: D, vec: Vector) -> Self {
         Self { document, vec }
     }
@@ -102,13 +67,6 @@ impl<D: Hash> Hash for DocumentVector<D> {
     }
 }
 
-impl<D: Ord> Ord for DocumentVector<D> {
-    #[inline]
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.document.cmp(&other.document)
-    }
-}
-
 impl<D: PartialOrd> PartialOrd for DocumentVector<D> {
     #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
@@ -125,20 +83,24 @@ impl<D: PartialEq> PartialEq for DocumentVector<D> {
 
 impl<D: Encodable> Encodable for DocumentVector<D> {
     fn encode<T: ByteOrder>(&self) -> Result<Vec<u8>, Error> {
-        let mut encoded = Vec::new();
+        let doc_enc = self.document.encode::<T>()?;
+        let svec = self.vec.sparse_vec();
+
+        let mut encoded = Vec::with_capacity(6 + (svec.len() * 6) + doc_enc.len());
+
         // 0..4 vector length
         encoded.write_f32::<T>(self.vec.get_length())?;
 
         // 4..6 vector-dimension count
-        encoded.write_u16::<T>(self.vec.sparse_vec().len() as u16)?;
+        encoded.write_u16::<T>(svec.len() as u16)?;
 
         // n*u48..
-        for (dimension, value) in self.vec.sparse_vec() {
+        for (dimension, value) in svec {
             encoded.write_u24::<T>(*dimension)?;
             encoded.write_f32::<T>(*value)?;
         }
 
-        encoded.write_all(&self.document.encode::<T>()?)?;
+        encoded.write_all(&doc_enc)?;
 
         Ok(encoded)
     }
@@ -166,379 +128,5 @@ impl<D: Decodable> Decodable for DocumentVector<D> {
         let vec = Vector::new_raw(dimensions, vec_length);
 
         Ok(DocumentVector::new_from_vector(doc, vec))
-    }
-}
-
-/// A document vector
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Vector {
-    /// Dimensions mapped to values
-    inner: Vec<(u32, f32)>,
-    /// Length of the vector
-    length: f32,
-}
-
-impl Vector {
-    /// Creates a new word vector from a Document using an index
-    #[inline]
-    pub fn new<V: Indexable, D: Document>(index: &V, document: &D) -> Option<Self> {
-        Self::new_with_weight(index, document, default_weight)
-    }
-
-    /// Creates a new word vector from a Document using an index and a custom weight modifier
-    pub fn new_with_weight<W, V, D>(index: &V, document: &D, weight_mod: W) -> Option<Self>
-    where
-        // TF, IDF -> f32
-        W: Fn(f32, Option<f32>) -> f32 + Copy,
-        V: Indexable,
-        D: Document,
-    {
-        let inner: Vec<(u32, f32)> = document
-            .get_terms()
-            .into_iter()
-            .filter_map(|term| {
-                let weight = cust_weight(&term, index, Some(document), weight_mod);
-                let index = index.index(&term)? as u32;
-                (weight != 0_f32).then(|| (index, weight))
-            })
-            .collect();
-
-        let mut word_vec = Self {
-            inner,
-            length: 0f32,
-        };
-
-        if word_vec.is_empty() {
-            return None;
-        }
-
-        word_vec.update();
-
-        Some(word_vec)
-    }
-
-    /// Create a new WordVec from raw values
-    #[inline]
-    pub fn create_new_raw(mut sparse: Vec<(u32, f32)>) -> Self {
-        sparse.sort_by(|a, b| a.0.cmp(&b.0));
-        let mut vec = Self {
-            inner: sparse,
-            length: 0.0,
-        };
-        vec.update();
-        vec
-    }
-
-    /// Create a new WordVec from raw values
-    #[inline]
-    pub fn new_raw(sparse: Vec<(u32, f32)>, length: f32) -> Self {
-        Self {
-            inner: sparse,
-            length,
-        }
-    }
-
-    /// Calculates the similarity between two vectors
-    #[inline]
-    pub fn similarity(&self, other: &Vector) -> f32 {
-        self.scalar(other) / (self.length * other.length)
-    }
-
-    /// Returns the reference to the inner vector
-    #[inline]
-    pub fn sparse_vec(&self) -> &Vec<(u32, f32)> {
-        &self.inner
-    }
-
-    /// Returns true if the vector is zero
-    #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.inner.is_empty()
-    }
-
-    /// Returns an iterator over all dimensions that are overlapping with current vector
-    pub fn overlapping_dimensions<'a>(
-        &'a self,
-        other: &'a Vector,
-    ) -> impl Iterator<Item = u32> + 'a {
-        let mut overlapping_iter =
-            LockStepIter::new(self.inner.iter().copied(), other.inner.iter().copied());
-
-        std::iter::from_fn(move || {
-            // little speedup
-            if self.is_empty()
-                || other.is_empty()
-                || self.first_indice() > other.last_indice()
-                || self.last_indice() < other.first_indice()
-            {
-                return None;
-            }
-
-            overlapping_iter.next().map(|i| i.0)
-        })
-    }
-
-    /// Returns true if both vectors have at least one dimension in common
-    pub fn overlaps_with(&self, other: &Vector) -> bool {
-        // little speedup
-        if self.is_empty()
-            || other.is_empty()
-            || self.first_indice() > other.last_indice()
-            || self.last_indice() < other.first_indice()
-        {
-            return false;
-        }
-
-        LockStepIter::new(self.inner.iter().copied(), other.inner.iter().copied())
-            .next()
-            .is_some()
-    }
-
-    /// Returns the amount of dimensions the vector uses
-    #[inline]
-    pub fn dimen_count(&self) -> usize {
-        self.inner.len()
-    }
-
-    /// Returns true if vector has a certain dimension
-    #[inline]
-    pub fn has_dim(&self, dim: u32) -> bool {
-        self.vec_indices().any(|i| i == dim)
-    }
-
-    /// Returns an iterator over all dimensions of the vector
-    #[inline]
-    pub fn vec_indices(&self) -> impl Iterator<Item = u32> + '_ {
-        self.inner.iter().map(|i| i.0)
-    }
-
-    /// Returns an iterator over all values of the vector
-    #[inline]
-    pub fn vec_values(&self) -> impl Iterator<Item = f32> + '_ {
-        self.inner.iter().map(|i| i.1)
-    }
-
-    /// Adds a term to the word vector. Shouldn't be called from a loop. If you have to add
-    /// multiple terms, use `add_terms`
-    fn add_term<D: Document, I: Indexable>(
-        &mut self,
-        index: &I,
-        term: &str,
-        skip_existing: bool,
-        weight_mult: Option<f32>,
-    ) {
-        self.add_single_term::<D, _>(index, term, skip_existing, weight_mult);
-        self.update();
-    }
-
-    /// Adds multiple terms to the word vector. This function should be preferred over `add_term`
-    /// if you have more than one term you want to add to a vector
-    pub fn add_terms<D: Document, I: Indexable, T: AsRef<str>>(
-        &mut self,
-        index: &I,
-        terms: &[T],
-        skip_existing: bool,
-        weight_mult: Option<f32>,
-    ) {
-        for term in terms.iter().map(|i| i.as_ref()) {
-            self.add_single_term::<D, _>(index, term, skip_existing, weight_mult);
-        }
-
-        self.update();
-    }
-
-    /// Update the vector values
-    #[inline]
-    pub fn update(&mut self) {
-        // Calculate new vector length
-        self.length = self.calc_len();
-
-        // Sort the elements since order might be different
-        self.sort();
-    }
-
-    /// Adds a term to the word vector. Afterwards `self.update()` should be called
-    fn add_single_term<D: Document, I: Indexable>(
-        &mut self,
-        index: &I,
-        term: &str,
-        skip_existing: bool,
-        weight_mult: Option<f32>,
-    ) {
-        let indexed = match index.index(&term) {
-            Some(s) => s as u32,
-            None => return,
-        };
-
-        let dim_used = self.has_dim(indexed);
-
-        if dim_used && skip_existing {
-            return;
-        } else if dim_used {
-            self.delete_dim(indexed);
-        }
-
-        let weight = weight::<D, _>(&term, index, None) * weight_mult.unwrap_or(1f32);
-        self.inner.push((indexed, weight));
-    }
-
-    /// Get the length of the vector
-    #[inline(always)]
-    pub fn get_length(&self) -> f32 {
-        self.length
-    }
-
-    /// Deletes a given dimension and its value from the vector
-    #[inline]
-    fn delete_dim(&mut self, dim: u32) {
-        self.inner.retain(|(curr_dim, _)| *curr_dim == dim);
-    }
-
-    #[inline]
-    fn scalar(&self, other: &Vector) -> f32 {
-        LockStepIter::new(self.inner.iter().copied(), other.inner.iter().copied())
-            .map(|(_, a, b)| a * b)
-            .sum()
-    }
-
-    /// Calculate the vector length
-    #[inline]
-    fn calc_len(&self) -> f32 {
-        self.inner
-            .iter()
-            .map(|(_, i)| i.powi(2))
-            .sum::<f32>()
-            .sqrt()
-    }
-
-    /// Sort the Vec<> by the dimensions
-    #[inline]
-    fn sort(&mut self) {
-        self.inner.sort_by(|a, b| a.0.cmp(&b.0));
-        self.inner.dedup_by(|a, b| a.0 == b.0);
-    }
-
-    #[inline(always)]
-    fn last_indice(&self) -> u32 {
-        self.inner.last().unwrap().0
-    }
-
-    #[inline(always)]
-    fn first_indice(&self) -> u32 {
-        self.inner.first().unwrap().0
-    }
-}
-
-#[inline]
-fn default_weight(tf: f32, idf: Option<f32>) -> f32 {
-    idf.map(|idf| tf * idf).unwrap_or(tf)
-}
-
-//let idf = if idf > 1f32 { 2.5 } else { 0.3f32 };
-#[inline]
-fn weight<D: Document, I: Indexable>(term: &str, index: &I, document: Option<&D>) -> f32 {
-    cust_weight(term, index, document, |tf, idf| default_weight(tf, idf))
-}
-
-fn cust_weight<W, D, I>(term: &str, index: &I, document: Option<&D>, weight_mod: W) -> f32
-where
-    // TF, IDF -> f32
-    W: Fn(f32, Option<f32>) -> f32 + Copy,
-    D: Document,
-    I: Indexable,
-{
-    let tf = document.map(|d| occurences(term, d) as f32).unwrap_or(1f32)/*.log10();*/;
-    let idf = idf(index, term);
-    weight_mod(tf, idf)
-}
-
-fn idf<I: Indexable>(index: &I, term: &str) -> Option<f32> {
-    Some((index.document_count() as f32 / index.word_occurrence(term)? as f32).log10())
-}
-
-fn occurences<D: Document>(term: &str, document: &D) -> usize {
-    document.get_terms().iter().filter(|i| *i == term).count()
-}
-
-impl PartialEq for Vector {
-    #[inline]
-    fn eq(&self, other: &Self) -> bool {
-        self.inner == other.inner
-    }
-}
-
-impl Eq for Vector {
-    #[inline]
-    fn assert_receiver_is_total_eq(&self) {}
-}
-
-impl PartialOrd for Vector {
-    #[inline]
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.inner.partial_cmp(&other.inner)
-    }
-}
-
-impl Ord for Vector {
-    #[inline]
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.inner
-            .partial_cmp(&other.inner)
-            .unwrap_or(Ordering::Equal)
-    }
-}
-
-struct LockStepIter<A, B, K, V, W>
-where
-    A: Iterator<Item = (K, V)>,
-    B: Iterator<Item = (K, W)>,
-{
-    a: Peekable<A>,
-    b: Peekable<B>,
-}
-
-impl<A, B, K, V, W> LockStepIter<A, B, K, V, W>
-where
-    A: Iterator<Item = (K, V)>,
-    B: Iterator<Item = (K, W)>,
-{
-    #[inline]
-    pub fn new(a: A, b: B) -> Self {
-        Self {
-            a: a.peekable(),
-            b: b.peekable(),
-        }
-    }
-}
-
-impl<A, B, K, V, W> Iterator for LockStepIter<A, B, K, V, W>
-where
-    A: Iterator<Item = (K, V)>,
-    B: Iterator<Item = (K, W)>,
-    K: Ord,
-{
-    type Item = (K, V, W);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            match (self.a.peek(), self.b.peek()) {
-                (Some((dim_a, _)), Some((dim_b, _))) => match dim_a.cmp(&dim_b) {
-                    Ordering::Less => {
-                        self.a.next()?;
-                    }
-                    Ordering::Greater => {
-                        self.b.next()?;
-                    }
-                    Ordering::Equal => {
-                        let (dim, value_a) = self.a.next().unwrap();
-                        let (_, value_b) = self.b.next().unwrap();
-                        return Some((dim, value_a, value_b));
-                    }
-                },
-
-                // At least one iterator finished
-                _ => return None,
-            }
-        }
     }
 }

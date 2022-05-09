@@ -63,7 +63,7 @@ impl<D: Decodable + Clone> VectorStore<D> {
 
     /// Set the dim_vec_map to `map`
     #[inline(always)]
-    pub fn set_dim_map(&mut self, map: DimVecMap) {
+    pub(crate) fn set_dim_map(&mut self, map: DimVecMap) {
         self.map = Some(Arc::new(map));
     }
 
@@ -73,11 +73,17 @@ impl<D: Decodable + Clone> VectorStore<D> {
         self.store.total_lines()
     }
 
+    /// Returns `true` if vector store does not contain any vectors
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn vector_iter(&self) -> impl Iterator<Item = DocumentVector<D>> + '_ {
         let mut pos = 0;
         std::iter::from_fn(move || {
             pos += 1;
-            self.clone().load_vector(pos - 1).ok().to_owned()
+            self.clone().load_vector(pos - 1).ok()
         })
     }
 
@@ -95,7 +101,7 @@ impl<D: Decodable + Clone> VectorStore<D> {
 
     /// Returns all vectors in `dimension`
     pub fn get(&mut self, dimension: u32) -> Option<Vec<DocumentVector<D>>> {
-        let vec_refs = self.get_map().get(dimension)?.clone();
+        let vec_refs = self.get_map().get(dimension)?;
         Some(self.load_documents(&vec_refs))
     }
 

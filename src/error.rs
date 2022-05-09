@@ -10,18 +10,21 @@ pub enum Error {
 }
 
 impl From<FromUtf8Error> for Error {
+    #[inline]
     fn from(_: FromUtf8Error) -> Self {
         Self::UTF8Error
     }
 }
 
 impl From<std::io::Error> for Error {
+    #[inline]
     fn from(e: std::io::Error) -> Self {
         Self::Io(e)
     }
 }
 
 impl From<indexed_file::error::Error> for Error {
+    #[inline]
     fn from(err: indexed_file::error::Error) -> Self {
         Self::IndexedFile(err)
     }
