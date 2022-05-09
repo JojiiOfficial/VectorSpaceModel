@@ -17,6 +17,7 @@ pub trait Document {
     fn get_terms(&self) -> Vec<String>;
 }
 
+/*
 /// Maps strings into a unique index assigned to the given string. This index will be used to build
 /// the document vector
 pub trait Indexable {
@@ -29,6 +30,7 @@ pub trait Indexable {
         None
     }
 }
+*/
 
 /// A structure representing a document with its calculated document-vector
 #[derive(Clone, Debug, Eq)]

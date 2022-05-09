@@ -1,7 +1,5 @@
 use std::io::Read;
-
 use byteorder::ByteOrder;
-
 use crate::error::Error;
 
 pub trait Encodable {

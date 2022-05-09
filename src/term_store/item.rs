@@ -1,8 +1,6 @@
-use std::convert::TryInto;
-
-use byteorder::WriteBytesExt;
-
 use crate::{traits::Encodable, Error};
+use byteorder::WriteBytesExt;
+use std::convert::TryInto;
 
 /// A single term info represented by a single line in `TermIndexer`
 #[derive(Debug, Clone)]

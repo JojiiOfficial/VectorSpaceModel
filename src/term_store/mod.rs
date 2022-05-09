@@ -1,5 +1,12 @@
 pub mod item;
 
+use self::item::IndexItem;
+use crate::{ error::Error, index::IndexBuilder, traits::Encodable};
+use byteorder::LittleEndian;
+use indexed_file::{
+    any::IndexedReader, index::Header as IndexHeader, index::Index as FileIndex, Indexable,
+    IndexableFile, ReadByLine,
+};
 use std::{
     io::{BufReader, Read, Seek, SeekFrom},
     sync::Arc,
@@ -7,16 +14,6 @@ use std::{
 
 /// File name in the index tar
 pub(crate) const FILE_NAME: &str = "term_indexer";
-
-use byteorder::LittleEndian;
-use indexed_file::{
-    any::IndexedReader, index::Header as IndexHeader, index::Index as FileIndex, Indexable,
-    IndexableFile, ReadByLine,
-};
-
-use crate::{document, error::Error, index::IndexBuilder, traits::Encodable};
-
-use self::item::IndexItem;
 
 /// An in memory TermIndexer that allows efficient indexing of terms which is requried for document
 /// vectors being calculated.
@@ -134,6 +131,7 @@ pub fn binary_search(index: &mut IndexedReader<Vec<u8>>, query: &str) -> Option<
         .ok()
 }
 
+/*
 impl document::Indexable for TermIndexer {
     #[inline]
     fn index(&self, part: &str) -> Option<usize> {
@@ -169,3 +167,4 @@ impl document::Indexable for TermIndexer {
         Some(item.frequency() as usize)
     }
 }
+*/

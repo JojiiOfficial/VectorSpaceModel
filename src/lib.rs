@@ -9,7 +9,7 @@ pub mod traits;
 pub mod vector;
 pub mod vector_store;
 
-pub use document::{Document, DocumentVector, Indexable};
+pub use document::{Document, DocumentVector};
 pub use error::Error;
 pub use index::{Index, NewIndex};
 pub use metadata::DefaultMetadata;

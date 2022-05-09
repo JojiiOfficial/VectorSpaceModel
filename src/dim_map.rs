@@ -13,8 +13,6 @@ use indexed_file::{any::IndexedReader, index::Header as IndexHeader, index::Inde
 /// FileName of dim_maps
 pub(crate) const FILE_NAME: &str = "dim_map";
 
-pub type DimToVecs = HashMap<u32, Vec<u32>>;
-
 /// A Dimension Vector map maps a dimension to all references of vectors which lay in the
 /// dimension. This allows much more efficient searching
 #[derive(Debug, Clone)]
@@ -82,6 +80,8 @@ impl DimVecMap {
             .is_some()
     }
 }
+
+pub type DimToVecs = HashMap<u32, Vec<u32>>;
 
 #[derive(Debug, Clone)]
 pub(crate) struct NewDimVecMap {
