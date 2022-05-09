@@ -167,6 +167,16 @@ impl TermIndexer {
             })
             .ok()
     }
+
+    /// Returns an iterator over all Indexed terms
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = IndexItem> + 'a {
+        let mut reader = self.index.clone();
+        (0..self.index.total_lines()).map(move |i| {
+            let mut buf = Vec::with_capacity(10);
+            reader.read_line_raw(i, &mut buf).unwrap();
+            IndexItem::decode(&buf).unwrap()
+        })
+    }
 }
 
 impl document_vector::Indexable for TermIndexer {
