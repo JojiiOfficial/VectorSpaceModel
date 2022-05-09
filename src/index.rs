@@ -9,7 +9,7 @@ use tar::Entry;
 
 use crate::{
     dim_map::{self, DimVecMap},
-    document_vector::DocumentVector,
+    document::DocumentVector,
     error::Error,
     metadata::{self, Metadata, MetadataBuild},
     term_store::{self, item::IndexItem, TermIndexer},

@@ -1,5 +1,5 @@
 pub mod dim_map;
-pub mod document_vector;
+pub mod document;
 pub mod error;
 pub mod index;
 pub mod lock_step;
@@ -9,7 +9,7 @@ pub mod traits;
 pub mod vector;
 pub mod vector_store;
 
-pub use document_vector::{Document, DocumentVector, Indexable};
+pub use document::{Document, DocumentVector, Indexable};
 pub use error::Error;
 pub use index::{Index, NewIndex};
 pub use metadata::DefaultMetadata;

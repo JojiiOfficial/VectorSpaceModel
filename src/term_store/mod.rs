@@ -14,7 +14,7 @@ use indexed_file::{
     IndexableFile, ReadByLine,
 };
 
-use crate::{document_vector, error::Error, index::IndexBuilder, traits::Encodable};
+use crate::{document, error::Error, index::IndexBuilder, traits::Encodable};
 
 use self::item::IndexItem;
 
@@ -134,7 +134,7 @@ pub fn binary_search(index: &mut IndexedReader<Vec<u8>>, query: &str) -> Option<
         .ok()
 }
 
-impl document_vector::Indexable for TermIndexer {
+impl document::Indexable for TermIndexer {
     #[inline]
     fn index(&self, part: &str) -> Option<usize> {
         binary_search(&mut self.index.clone(), part)

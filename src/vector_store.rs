@@ -18,7 +18,7 @@ use indexed_file::{
 
 use crate::{
     dim_map::{DimToVecs, DimVecMap, NewDimVecMap},
-    document_vector::DocumentVector,
+    document::DocumentVector,
     error::Error,
     index::IndexBuilder,
     traits::{Decodable, Encodable},
