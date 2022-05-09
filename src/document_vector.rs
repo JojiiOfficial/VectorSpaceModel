@@ -6,6 +6,7 @@ use std::{
 };
 
 use byteorder::{ByteOrder, ReadBytesExt, WriteBytesExt};
+use serde::{Deserialize, Serialize};
 
 use crate::{
     error::Error,
@@ -131,9 +132,9 @@ impl<D: Encodable> Encodable for DocumentVector<D> {
         // 4..6 vector-dimension count
         encoded.write_u16::<T>(self.vec.sparse_vec().len() as u16)?;
 
-        // n*u64..
+        // n*u48..
         for (dimension, value) in self.vec.sparse_vec() {
-            encoded.write_u32::<T>(*dimension)?;
+            encoded.write_u24::<T>(*dimension)?;
             encoded.write_f32::<T>(*value)?;
         }
 
@@ -154,7 +155,7 @@ impl<D: Decodable> Decodable for DocumentVector<D> {
 
         let dimensions: Vec<_> = (0..vector_dim_count)
             .map(|_| -> Result<_, std::io::Error> {
-                let dim = data.read_u32::<T>()?;
+                let dim = data.read_u24::<T>()?;
                 let val = data.read_f32::<T>()?;
                 Ok((dim, val))
             })
@@ -169,7 +170,7 @@ impl<D: Decodable> Decodable for DocumentVector<D> {
 }
 
 /// A document vector
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Vector {
     /// Dimensions mapped to values
     inner: Vec<(u32, f32)>,
@@ -218,6 +219,18 @@ impl Vector {
 
     /// Create a new WordVec from raw values
     #[inline]
+    pub fn create_new_raw(mut sparse: Vec<(u32, f32)>) -> Self {
+        sparse.sort_by(|a, b| a.0.cmp(&b.0));
+        let mut vec = Self {
+            inner: sparse,
+            length: 0.0,
+        };
+        vec.update();
+        vec
+    }
+
+    /// Create a new WordVec from raw values
+    #[inline]
     pub fn new_raw(sparse: Vec<(u32, f32)>, length: f32) -> Self {
         Self {
             inner: sparse,
@@ -243,10 +256,36 @@ impl Vector {
         self.inner.is_empty()
     }
 
+    /// Returns an iterator over all dimensions that are overlapping with current vector
+    pub fn overlapping_dimensions<'a>(
+        &'a self,
+        other: &'a Vector,
+    ) -> impl Iterator<Item = u32> + 'a {
+        let mut overlapping_iter =
+            LockStepIter::new(self.inner.iter().copied(), other.inner.iter().copied());
+
+        std::iter::from_fn(move || {
+            // little speedup
+            if self.is_empty()
+                || other.is_empty()
+                || self.first_indice() > other.last_indice()
+                || self.last_indice() < other.first_indice()
+            {
+                return None;
+            }
+
+            overlapping_iter.next().map(|i| i.0)
+        })
+    }
+
     /// Returns true if both vectors have at least one dimension in common
     pub fn overlaps_with(&self, other: &Vector) -> bool {
         // little speedup
-        if self.first_indice() > other.last_indice() || self.last_indice() < other.first_indice() {
+        if self.is_empty()
+            || other.is_empty()
+            || self.first_indice() > other.last_indice()
+            || self.last_indice() < other.first_indice()
+        {
             return false;
         }
 

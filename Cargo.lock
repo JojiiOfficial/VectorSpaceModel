@@ -674,6 +674,7 @@ dependencies = [
  "flate2",
  "indexed_file",
  "rand",
+ "serde",
  "tar",
 ]
 

@@ -17,6 +17,7 @@ byteorder = "1.4.3"
 tar = "0.4.38"
 flate2 = "1.0.22"
 bktree = { git = "https://github.com/JojiiOfficial/bktree"}
+serde = {version = "*", features = ["derive"]}
 
 [dev-dependencies]
 criterion = "0.3.5"
