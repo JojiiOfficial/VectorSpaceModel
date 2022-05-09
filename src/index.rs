@@ -12,7 +12,7 @@ use crate::{
     document::DocumentVector,
     error::Error,
     metadata::{self, Metadata, MetadataBuild},
-    term_store::{self, item::IndexItem, TermIndexer},
+    term_store::{self, item::IndexTerm, TermIndexer},
     traits::{Decodable, Encodable},
     vector_store::{self, VectorStore},
 };
@@ -70,11 +70,15 @@ impl<D: Decodable + Clone, M: Metadata> Index<D, M> {
                 .and_then(|i| i.file_name().and_then(|i| i.to_str().map(|i| i.to_owned())))
                 .ok_or(Error::InvalidIndex)?;
 
+            let size = entry.size();
+
             match name.as_str() {
                 metadata::FILE_NAME => metadata = Some(Self::parse_metadata(entry)?),
-                term_store::FILE_NAME => term_indexer = Some(Self::parse_indexer(entry)?),
-                dim_map::FILE_NAME => dim_map = Some(Self::parse_dim_map(entry)?),
-                vector_store::FILE_NAME => vector_store = Some(Self::parse_vector_store(entry)?),
+                term_store::FILE_NAME => term_indexer = Some(Self::parse_indexer(entry, size)?),
+                dim_map::FILE_NAME => dim_map = Some(Self::parse_dim_map(entry, size)?),
+                vector_store::FILE_NAME => {
+                    vector_store = Some(Self::parse_vector_store(entry, size)?)
+                }
                 _ => (),
             }
         }
@@ -94,20 +98,20 @@ impl<D: Decodable + Clone, M: Metadata> Index<D, M> {
         })
     }
 
-    fn parse_vector_store<R: Read>(mut entry: Entry<R>) -> Result<VectorStore<D>> {
-        let mut data = Vec::new();
+    fn parse_vector_store<R: Read>(mut entry: Entry<R>, size: u64) -> Result<VectorStore<D>> {
+        let mut data = Vec::with_capacity(size as usize);
         entry.read_to_end(&mut data)?;
         VectorStore::new(Cursor::new(data))
     }
 
-    fn parse_indexer<R: Read>(mut entry: Entry<R>) -> Result<TermIndexer> {
-        let mut data = Vec::new();
+    fn parse_indexer<R: Read>(mut entry: Entry<R>, size: u64) -> Result<TermIndexer> {
+        let mut data = Vec::with_capacity(size as usize);
         entry.read_to_end(&mut data)?;
         TermIndexer::new(Cursor::new(data)).map_err(|_| Error::InvalidIndex)
     }
 
-    fn parse_dim_map<R: Read>(mut entry: Entry<R>) -> Result<DimVecMap> {
-        let mut data = Vec::new();
+    fn parse_dim_map<R: Read>(mut entry: Entry<R>, size: u64) -> Result<DimVecMap> {
+        let mut data = Vec::with_capacity(size as usize);
         entry.read_to_end(&mut data)?;
         DimVecMap::load(Cursor::new(data)).map_err(|_| Error::InvalidIndex)
     }
@@ -194,7 +198,7 @@ impl NewIndex {
     where
         E: Encodable + Clone,
         D: Decodable + Clone,
-        T: Iterator<Item = IndexItem>,
+        T: Iterator<Item = IndexTerm>,
         FV: FnMut(&TermIndexer) -> Vec<DocumentVector<E>>,
         M: Metadata,
     {

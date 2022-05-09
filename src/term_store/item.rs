@@ -2,44 +2,57 @@ use crate::{traits::Encodable, Error};
 use byteorder::WriteBytesExt;
 use std::convert::TryInto;
 
-/// A single term info represented by a single line in `TermIndexer`
+/// A term in the index
 #[derive(Debug, Clone)]
-pub struct IndexItem {
+pub struct IndexTerm {
+    /// The terms text/value
     text: String,
-    frequency: u16,
+    /// number of documents with this term
+    frequency: u32,
 }
 
-impl IndexItem {
+impl IndexTerm {
+    /// Creates a new term
     #[inline]
-    pub fn new(text: String, frequency: u16) -> IndexItem {
+    pub fn new(text: String, frequency: u32) -> IndexTerm {
         Self { text, frequency }
     }
 
+    /// Decodes an index item from raw data. Panics if the data is malformed
     #[inline(always)]
-    pub fn decode(data: &[u8]) -> Result<Self, Error> {
-        let frequency = u16::from_le_bytes(data[0..2].try_into().unwrap());
-        let text = String::from_utf8_lossy(&data[2..]).to_string();
-        Ok(Self { text, frequency })
+    pub fn decode(data: &[u8]) -> Self {
+        let frequency = u32::from_le_bytes(data[0..4].try_into().unwrap());
+        let text = String::from_utf8_lossy(&data[4..]).to_string();
+        Self { text, frequency }
     }
 
     /// Get a reference to the index item's text.
     #[inline]
     pub fn text(&self) -> &str {
-        self.text.as_ref()
+        &self.text
     }
 
     /// Get the index item's frequency.
     #[inline]
-    pub fn frequency(&self) -> u16 {
+    pub fn frequency(&self) -> u32 {
         self.frequency
     }
 }
 
-impl Encodable for IndexItem {
+impl AsRef<str> for IndexTerm {
+    #[inline]
+    fn as_ref(&self) -> &str {
+        &self.text
+    }
+}
+
+impl Encodable for IndexTerm {
+    #[inline]
     fn encode<T: byteorder::ByteOrder>(&self) -> Result<Vec<u8>, Error> {
-        let mut out = Vec::new();
-        out.write_u16::<T>(self.frequency)?;
-        out.extend(self.text.as_bytes());
+        let text = self.text.as_bytes();
+        let mut out = Vec::with_capacity(text.len() + 4);
+        out.write_u32::<T>(self.frequency)?;
+        out.extend(text);
         Ok(out)
     }
 }

@@ -1,7 +1,7 @@
 pub mod item;
 
-use self::item::IndexItem;
-use crate::{ error::Error, index::IndexBuilder, traits::Encodable};
+use self::item::IndexTerm;
+use crate::{error::Error, index::IndexBuilder, traits::Encodable};
 use byteorder::LittleEndian;
 use indexed_file::{
     any::IndexedReader, index::Header as IndexHeader, index::Index as FileIndex, Indexable,
@@ -57,17 +57,17 @@ impl TermIndexer {
 
     /// Finds a term in the termindex
     #[inline]
-    pub fn find_term(&mut self, term: &str) -> Option<IndexItem> {
+    pub fn find_term(&mut self, term: &str) -> Option<IndexTerm> {
         let dimension = binary_search(&mut self.index, term)?;
         self.load_term(dimension)
     }
 
     /// Gets a term by its dimension
     #[inline]
-    pub fn load_term(&mut self, dimension: usize) -> Option<IndexItem> {
+    pub fn load_term(&mut self, dimension: usize) -> Option<IndexTerm> {
         let mut buf = Vec::with_capacity(10);
         self.index.read_line_raw(dimension, &mut buf).ok()?;
-        IndexItem::decode(&buf).ok()
+        Some(IndexTerm::decode(&buf))
     }
 
     /// Sets the total amount of documents in the index. This is required for better indexing
@@ -77,12 +77,12 @@ impl TermIndexer {
     }
 
     /// Returns an iterator over all Indexed terms
-    pub fn iter(&self) -> impl Iterator<Item = IndexItem> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = IndexTerm> + '_ {
         let mut reader = self.index.clone();
         (0..self.index.total_lines()).map(move |i| {
             let mut buf = Vec::with_capacity(10);
             reader.read_line_raw(i, &mut buf).unwrap();
-            IndexItem::decode(&buf).unwrap()
+            IndexTerm::decode(&buf)
         })
     }
 
@@ -93,7 +93,7 @@ impl TermIndexer {
         terms: T,
     ) -> Result<Self, Error>
     where
-        T: Iterator<Item = IndexItem>,
+        T: Iterator<Item = IndexTerm>,
     {
         let mut index = Vec::new();
         let mut text = Vec::new();
@@ -124,10 +124,7 @@ impl TermIndexer {
 #[inline]
 pub fn binary_search(index: &mut IndexedReader<Vec<u8>>, query: &str) -> Option<usize> {
     index
-        .binary_search_raw_by(|i| {
-            let item = IndexItem::decode(i).unwrap();
-            item.text().cmp(query)
-        })
+        .binary_search_raw_by(|i| IndexTerm::decode(i).text().cmp(query))
         .ok()
 }
 

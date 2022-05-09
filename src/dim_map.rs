@@ -54,6 +54,7 @@ impl DimVecMap {
         let arr_start = self.index.get(dim as usize).ok()? as usize;
 
         let mut buf_vec = BufCVecRef::new(&self.data);
+
         // Length of following vec containing the vector IDs
         let arr_len = *buf_vec.get_buffered(arr_start)? as usize;
 

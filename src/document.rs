@@ -12,26 +12,6 @@ use crate::{
     vector::Vector,
 };
 
-/// Representing a document which can be indexed
-pub trait Document {
-    fn get_terms(&self) -> Vec<String>;
-}
-
-/*
-/// Maps strings into a unique index assigned to the given string. This index will be used to build
-/// the document vector
-pub trait Indexable {
-    fn index(&self, part: &str) -> Option<usize>;
-    fn index_size(&self) -> usize;
-    fn document_count(&self) -> usize;
-
-    #[inline]
-    fn word_occurrence(&self, _term: &str) -> Option<usize> {
-        None
-    }
-}
-*/
-
 /// A structure representing a document with its calculated document-vector
 #[derive(Clone, Debug, Eq)]
 pub struct DocumentVector<D> {
@@ -47,7 +27,7 @@ impl<D> DocumentVector<D> {
     }
 
     #[inline(always)]
-    pub fn similarity<O: Document>(&self, other: &DocumentVector<O>) -> f32 {
+    pub fn similarity<O>(&self, other: &DocumentVector<O>) -> f32 {
         self.vec.similarity(&other.vec)
     }
 
