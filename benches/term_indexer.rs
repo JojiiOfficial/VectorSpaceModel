@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use vector_space_model::term_indexer::IndexItem;
+use vector_space_model::term_store::item::IndexTerm;
 
 fn index_item_decode(c: &mut Criterion) {
     let mut data = vec![];
@@ -7,7 +7,7 @@ fn index_item_decode(c: &mut Criterion) {
     data.extend("deine Oma liegt ganz schön lange im Koma".as_bytes());
 
     c.bench_function("index item decode", |b| {
-        b.iter(|| IndexItem::decode(&data));
+        b.iter(|| IndexTerm::decode(&data));
     });
 }
 

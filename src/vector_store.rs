@@ -2,7 +2,7 @@ use std::{
     cmp::min,
     collections::HashMap,
     future::Future,
-    io::{BufReader, Cursor, Read, Seek, SeekFrom},
+    io::{BufReader, Cursor, Read, Seek, SeekFrom, Write},
     marker::PhantomData,
     mem,
     pin::Pin,
@@ -17,10 +17,10 @@ use indexed_file::{
 };
 
 use crate::{
+    build::output::OutputBuilder,
     dim_map::{DimToVecs, DimVecMap, NewDimVecMap},
     document::DocumentVector,
     error::Error,
-    index::IndexBuilder,
     traits::{Decodable, Encodable},
 };
 
@@ -29,13 +29,13 @@ pub(crate) const FILE_NAME: &str = "vectors";
 
 /// A struct containing raw data of vectors and a map from a dimension to a set of those vectors.
 #[derive(Debug, Clone)]
-pub struct VectorStore<D: Decodable + Clone> {
+pub struct VectorStore<D: Decodable> {
     store: IndexedReader<Vec<u8>>,
     map: Option<Arc<DimVecMap>>,
     vec_type: PhantomData<D>,
 }
 
-impl<D: Decodable + Clone> VectorStore<D> {
+impl<D: Decodable> VectorStore<D> {
     /// Builds data for a new DocumentStore. This contains all generated vectors.
     ///
     /// The `map` gets initialized with `None` and hast to be set afterwards using
@@ -60,13 +60,6 @@ impl<D: Decodable + Clone> VectorStore<D> {
             vec_type: PhantomData,
         })
     }
-
-    /// Set the dim_vec_map to `map`
-    #[inline(always)]
-    pub(crate) fn set_dim_map(&mut self, map: DimVecMap) {
-        self.map = Some(Arc::new(map));
-    }
-
     /// Get the amount of vectors in the `VectorStore`
     #[inline]
     pub fn len(&self) -> usize {
@@ -79,11 +72,17 @@ impl<D: Decodable + Clone> VectorStore<D> {
         self.len() == 0
     }
 
-    pub fn vector_iter(&self) -> impl Iterator<Item = DocumentVector<D>> + '_ {
+    /// Returns an iterator over all Vectors in the vecstore
+    pub fn iter(&self) -> impl Iterator<Item = DocumentVector<D>> + '_ {
         let mut pos = 0;
+        let mut reader = self.store.clone();
         std::iter::from_fn(move || {
+            if pos >= self.len() {
+                return None;
+            }
+            let vec = load_vector_reader(&mut reader, pos).ok()?;
             pos += 1;
-            self.clone().load_vector(pos - 1).ok()
+            Some(vec)
         })
     }
 
@@ -100,39 +99,14 @@ impl<D: Decodable + Clone> VectorStore<D> {
     }
 
     /// Returns all vectors in `dimension`
-    pub fn get(&mut self, dimension: u32) -> Option<Vec<DocumentVector<D>>> {
+    #[inline]
+    pub fn get_in_dim(&mut self, dimension: u32) -> Option<Vec<DocumentVector<D>>> {
         let vec_refs = self.get_map().get(dimension)?;
         Some(self.load_documents(&vec_refs))
     }
 
-    /// Returns all vectors in given dimensions efficiently
-    #[deprecated(since = "0.1.0", note = "please use `get_all_iter` instead")]
-    pub fn get_all(&mut self, dimensions: &[u32]) -> Option<Vec<DocumentVector<D>>> {
-        let vec_refs = self.vectors_in_dimensions(dimensions);
-        Some(self.load_documents(&vec_refs))
-    }
-
-    /// Returns all vectors in given dimensions efficiently via an iterator
-    #[inline]
-    pub fn get_all_iter<'a>(
-        &'a mut self,
-        dimensions: &[u32],
-    ) -> impl Iterator<Item = DocumentVector<D>> + 'a {
-        let vec_refs = self.vectors_in_dimensions(dimensions);
-        self.load_documents_iter(vec_refs.into_iter())
-    }
-
-    /// Load all documents by their ids
-    #[inline]
-    fn load_documents_iter<'a>(
-        &'a mut self,
-        vec_ids: impl Iterator<Item = u32> + 'a,
-    ) -> impl Iterator<Item = DocumentVector<D>> + 'a {
-        vec_ids.map(move |i| self.load_vector(i as usize).expect("invalid index format"))
-    }
-
     /// Returns all unique vector references laying in `dimensions`
-    fn vectors_in_dimensions(&mut self, dimensions: &[u32]) -> Vec<u32> {
+    pub fn get_in_dims(&mut self, dimensions: &[u32]) -> Vec<u32> {
         let mut vec_refs: Vec<_> = dimensions
             .iter()
             .filter_map(|i| self.get_map().get(*i))
@@ -143,6 +117,25 @@ impl<D: Decodable + Clone> VectorStore<D> {
         vec_refs.dedup();
 
         vec_refs
+    }
+
+    /// Returns all vectors in given dimensions efficiently via an iterator
+    #[inline]
+    pub fn get_all_iter<'a>(
+        &'a mut self,
+        dimensions: &[u32],
+    ) -> impl Iterator<Item = DocumentVector<D>> + 'a {
+        let vec_refs = self.get_in_dims(dimensions);
+        self.load_documents_iter(vec_refs.into_iter())
+    }
+
+    /// Load all documents by their ids
+    #[inline]
+    fn load_documents_iter<'a>(
+        &'a mut self,
+        vec_ids: impl Iterator<Item = u32> + 'a,
+    ) -> impl Iterator<Item = DocumentVector<D>> + 'a {
+        vec_ids.map(move |i| self.load_vector(i as usize).expect("invalid index format"))
     }
 
     /// Load all documents by their ids
@@ -157,13 +150,28 @@ impl<D: Decodable + Clone> VectorStore<D> {
     /// Read and decode a vector from `self.store` and returns it
     #[inline(always)]
     fn load_vector(&mut self, line: usize) -> Result<DocumentVector<D>, Error> {
-        let mut buf = Vec::new();
-        self.store.read_line_raw(line, &mut buf)?;
-        DocumentVector::decode::<LittleEndian, _>(Cursor::new(buf))
+        load_vector_reader(&mut self.store, line)
+    }
+
+    /// Set the dim_vec_map to `map`
+    #[inline(always)]
+    pub(crate) fn set_dim_map(&mut self, map: DimVecMap) {
+        self.map = Some(Arc::new(map));
     }
 }
 
-impl<D: Decodable + Clone + Unpin> VectorStore<D> {
+/// Read and decode a vector from `self.store` and returns it
+#[inline(always)]
+fn load_vector_reader<D: Decodable>(
+    reader: &mut IndexedReader<Vec<u8>>,
+    line: usize,
+) -> Result<DocumentVector<D>, Error> {
+    let mut buf = Vec::new();
+    reader.read_line_raw(line, &mut buf)?;
+    DocumentVector::decode::<LittleEndian, _>(Cursor::new(buf))
+}
+
+impl<D: Decodable + Unpin> VectorStore<D> {
     /// Returns all vectors in `dimension`
     pub async fn get_async(&mut self, dimension: u32) -> Result<Vec<DocumentVector<D>>, Error> {
         let vec_refs = self.get_map().get(dimension).unwrap_or_default();
@@ -175,7 +183,7 @@ impl<D: Decodable + Clone + Unpin> VectorStore<D> {
         &mut self,
         dimensions: &[u32],
     ) -> Result<Vec<DocumentVector<D>>, Error> {
-        let vec_refs = self.vectors_in_dimensions(dimensions);
+        let vec_refs = self.get_in_dims(dimensions);
         self.load_vecs_async(vec_refs).await
     }
 
@@ -190,7 +198,7 @@ impl<D: Decodable + Clone + Unpin> VectorStore<D> {
 }
 
 /// Load document vectors asynchronously by chunking the load process into small pieces
-struct AsyncDocRetrieval<D: Decodable + Clone + Unpin> {
+struct AsyncDocRetrieval<D: Decodable + Unpin> {
     vec_refs: Vec<u32>,
     store: IndexedReader<Vec<u8>>,
     vec_type: PhantomData<D>,
@@ -198,7 +206,7 @@ struct AsyncDocRetrieval<D: Decodable + Clone + Unpin> {
     last_pos: usize,
 }
 
-impl<D: Decodable + Clone + Unpin> AsyncDocRetrieval<D> {
+impl<D: Decodable + Unpin> AsyncDocRetrieval<D> {
     #[inline(always)]
     fn new(vec_refs: Vec<u32>, store: IndexedReader<Vec<u8>>) -> Self {
         Self {
@@ -214,7 +222,7 @@ impl<D: Decodable + Clone + Unpin> AsyncDocRetrieval<D> {
     }
 }
 
-impl<D: Decodable + Clone + Unpin> Future for AsyncDocRetrieval<D> {
+impl<D: Decodable + Unpin> Future for AsyncDocRetrieval<D> {
     type Output = Result<Vec<DocumentVector<D>>, Error>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -252,13 +260,10 @@ impl<D: Decodable + Clone + Unpin> Future for AsyncDocRetrieval<D> {
 }
 
 /// Creates a new DocumentStore using a with `build` generated DocumentStore.
-pub(crate) fn build<V, D: Encodable + Clone>(
-    index_builder: &mut IndexBuilder,
-    vectors: V,
-) -> Result<(), Error>
-where
-    V: Iterator<Item = DocumentVector<D>>,
-{
+pub(crate) fn build<D: Encodable, W: Write>(
+    index_builder: &mut OutputBuilder<W>,
+    vectors: Vec<DocumentVector<D>>,
+) -> Result<(), Error> {
     let mut encoded_vectors: Vec<u8> = Vec::new();
 
     // Map from dimensions to vectors in dimension
@@ -267,7 +272,7 @@ where
     // Index position for each vector
     let mut file_index: Vec<u32> = Vec::new();
 
-    for (pos, vector) in vectors.enumerate() {
+    for (pos, vector) in vectors.into_iter().enumerate() {
         // Bulid map from dimension to all vectors in this dimension
         for dim in vector.vector().vec_indices() {
             dim_vec_map.entry(dim).or_default().push(pos as u32);
@@ -287,7 +292,5 @@ where
     let mut out = Vec::new();
     indexed_vectors.write_to(&mut out)?;
     index_builder.write_vectors(&out)?;
-    drop(out);
-
     Ok(())
 }

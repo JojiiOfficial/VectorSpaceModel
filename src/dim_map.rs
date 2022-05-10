@@ -1,13 +1,13 @@
 use std::{
     collections::HashMap,
-    io::{BufReader, Read, Seek, SeekFrom},
+    io::{BufReader, Read, Seek, SeekFrom, Write},
     sync::Arc,
 };
 
 use byteorder::LittleEndian;
 use compressed_vec::{buffered::BufCVecRef, CVec};
 
-use crate::{error::Error, index::IndexBuilder, traits::Encodable};
+use crate::{build::output::OutputBuilder, error::Error, traits::Encodable};
 use indexed_file::{any::IndexedReader, index::Header as IndexHeader, index::Index, IndexableFile};
 
 /// FileName of dim_maps
@@ -96,7 +96,10 @@ impl NewDimVecMap {
     }
 
     /// Build a dimension vector map and write it to `index_builder`
-    pub(crate) fn build(&self, index_builder: &mut IndexBuilder) -> Result<(), Error> {
+    pub(crate) fn build<W: Write>(
+        &self,
+        index_builder: &mut OutputBuilder<W>,
+    ) -> Result<(), Error> {
         index_builder.write_dim_vec_map(&self.encode::<LittleEndian>()?)?;
         Ok(())
     }

@@ -4,32 +4,31 @@ use std::{
     path::Path,
 };
 
-use flate2::{read::GzDecoder, write::GzEncoder, Compression};
+use flate2::read::GzDecoder;
 use tar::Entry;
 
 use crate::{
     dim_map::{self, DimVecMap},
-    document::DocumentVector,
     error::Error,
-    metadata::{self, Metadata, MetadataBuild},
-    term_store::{self, item::IndexTerm, TermIndexer},
-    traits::{Decodable, Encodable},
+    metadata::{self, Metadata},
+    term_store::{self, TermIndexer},
+    traits::Decodable,
     vector_store::{self, VectorStore},
 };
 
 type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Clone)]
-pub struct Index<D: Decodable + Clone, M: Metadata> {
+pub struct Index<D: Decodable, M: Metadata> {
     metadata: M,
     indexer: TermIndexer,
     vector_store: VectorStore<D>,
 }
 
-impl<D: Decodable + Clone, M: Metadata> Index<D, M> {
+impl<D: Decodable, M: Metadata> Index<D, M> {
     /// Opens an Index from a tar.gz file and returns a new `Index`
     pub fn open<P: AsRef<Path>>(file: P) -> Result<Index<D, M>> {
-        Self::from_archive(file)
+        Self::from_reader(BufReader::new(File::open(file)?))
     }
 
     /// Returns the vector store of the index
@@ -50,10 +49,11 @@ impl<D: Decodable + Clone, M: Metadata> Index<D, M> {
         &self.metadata
     }
 
+    // TODO: add function to create new vectors (incl. weights)
+
     /// Read an index-archive and build an `Index` out of it
-    fn from_archive<P: AsRef<Path>>(file: P) -> Result<Index<D, M>> {
-        let file = BufReader::new(File::open(file)?);
-        let mut archive = tar::Archive::new(GzDecoder::new(file));
+    pub fn from_reader<R: Read>(reader: R) -> Result<Index<D, M>> {
+        let mut archive = tar::Archive::new(GzDecoder::new(reader));
 
         // We have to read the archives files in the same order as archives.entries() yields
         // the elements
@@ -118,100 +118,5 @@ impl<D: Decodable + Clone, M: Metadata> Index<D, M> {
 
     fn parse_metadata<T: Read>(entry: Entry<T>) -> Result<M> {
         M::load(entry).map_err(|_| Error::InvalidIndex)
-    }
-}
-
-/// An crate internal helper for building new index files.
-pub(crate) struct IndexBuilder {
-    builder: tar::Builder<GzEncoder<File>>,
-}
-
-impl IndexBuilder {
-    /// Create a new IndexBuilder
-    pub fn new<S: AsRef<str>>(file_name: S) -> Result<IndexBuilder> {
-        std::fs::remove_file(file_name.as_ref()).ok();
-        let enc = GzEncoder::new(File::create(file_name.as_ref())?, Compression::best());
-        let tar = tar::Builder::new(enc);
-
-        Ok(Self { builder: tar })
-    }
-
-    pub fn write_vectors(&mut self, data: &[u8]) -> Result<()> {
-        self.append_file(vector_store::FILE_NAME, data)?;
-        Ok(())
-    }
-
-    pub fn write_term_indexer(&mut self, data: &[u8]) -> Result<()> {
-        self.append_file(term_store::FILE_NAME, data)?;
-        Ok(())
-    }
-
-    pub fn write_metadata(&mut self, data: &[u8]) -> Result<()> {
-        self.append_file(metadata::FILE_NAME, data)?;
-        Ok(())
-    }
-
-    pub fn write_dim_vec_map(&mut self, data: &[u8]) -> Result<()> {
-        self.append_file(dim_map::FILE_NAME, data)?;
-        Ok(())
-    }
-
-    pub fn finish(&mut self) -> Result<()> {
-        self.builder.finish()?;
-        Ok(())
-    }
-
-    /// Append a file to the index
-    fn append_file(&mut self, name: &str, data: &[u8]) -> Result<()> {
-        let mut header = tar::Header::new_gnu();
-        header.set_path(name)?;
-        header.set_size(data.len() as u64);
-        header.set_entry_type(tar::EntryType::file());
-        header.set_cksum();
-        self.builder.append(&header, data)?;
-        Ok(())
-    }
-}
-
-/// Public API for generating new index files
-pub struct NewIndex {
-    output: String,
-    doc_count: usize,
-}
-
-impl NewIndex {
-    /// Constructs a new `NewIndex`
-    pub fn new<S: AsRef<str>>(output: S, doc_count: usize) -> NewIndex {
-        Self {
-            output: output.as_ref().to_string(),
-            doc_count,
-        }
-    }
-
-    /// Compile a new index for a given space vector model
-    pub fn build<E, D, T, FV, M>(
-        &self,
-        unique_terms: T,
-        metadata: M,
-        mut calc_vecs: FV,
-    ) -> Result<()>
-    where
-        E: Encodable + Clone,
-        D: Decodable + Clone,
-        T: Iterator<Item = IndexTerm>,
-        FV: FnMut(&TermIndexer) -> Vec<DocumentVector<E>>,
-        M: Metadata,
-    {
-        let mut index_builder = IndexBuilder::new(&self.output)?;
-
-        let term_indexer = TermIndexer::build(&mut index_builder, self.doc_count, unique_terms)?;
-
-        vector_store::build(&mut index_builder, calc_vecs(&term_indexer).into_iter())?;
-
-        metadata.build(&mut index_builder)?;
-
-        index_builder.finish()?;
-
-        Ok(())
     }
 }

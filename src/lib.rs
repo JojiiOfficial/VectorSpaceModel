@@ -1,3 +1,4 @@
+pub mod build;
 pub mod dim_map;
 pub mod document;
 pub mod error;
@@ -11,7 +12,7 @@ pub mod vector_store;
 
 pub use document::DocumentVector;
 pub use error::Error;
-pub use index::{Index, NewIndex};
+pub use index::Index;
 pub use metadata::DefaultMetadata;
 pub use vector::Vector;
 pub use vector_store::VectorStore;

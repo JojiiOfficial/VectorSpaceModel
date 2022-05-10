@@ -2,10 +2,7 @@ use std::{convert::TryFrom, io::Read};
 
 use byteorder::{ByteOrder, ReadBytesExt, WriteBytesExt};
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use vector_space_model::{
-    document_vector::Indexable, error::Error, index::Index, metadata::IndexVersion,
-    traits::Decodable,
-};
+use vector_space_model::{error::Error, index::Index, metadata::IndexVersion, traits::Decodable};
 
 fn get_all(c: &mut Criterion) {
     let index = Index::<Document, Metadata>::open("./out_index_de").unwrap();
@@ -14,9 +11,7 @@ fn get_all(c: &mut Criterion) {
     c.bench_function("get all", |b| {
         let to_get = vec![12073, 26015, 54225, 56717, 123781, 125995, 126438, 126515];
 
-        b.iter(|| {
-            vec_store.clone().get_all(black_box(&to_get));
-        })
+        b.iter(|| vec_store.clone().get_in_dims(black_box(&to_get)))
     });
 }
 
@@ -29,7 +24,7 @@ fn get_mult(c: &mut Criterion) {
 
         b.iter(|| {
             for i in to_get.iter() {
-                vec_store.clone().get(black_box(*i));
+                vec_store.clone().get_in_dim(black_box(*i));
             }
         })
     });
@@ -41,8 +36,8 @@ fn get(c: &mut Criterion) {
     let vec_store = index.get_vector_store();
 
     c.bench_function("get single", |b| {
-        let t = term_indexer.index("einer").unwrap();
-        b.iter(|| vec_store.clone().get(t as u32))
+        let t = term_indexer.get_term("einer").unwrap();
+        b.iter(|| vec_store.clone().get_in_dim(t as u32))
     });
 }
 

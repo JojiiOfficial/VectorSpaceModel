@@ -6,8 +6,8 @@ use std::{
 use byteorder::{ByteOrder, LittleEndian, ReadBytesExt, WriteBytesExt};
 
 use crate::{
+    build::output::OutputBuilder,
     error::Error,
-    index::IndexBuilder,
     traits::{Decodable, Encodable},
 };
 
@@ -57,7 +57,7 @@ pub trait Metadata: Encodable + Decodable {
 /// within this crate.
 pub(crate) trait MetadataBuild: Metadata {
     /// Builds a new Metadata file
-    fn build(&self, index_builder: &mut IndexBuilder) -> Result<(), Error> {
+    fn build<W: Write>(&self, index_builder: &mut OutputBuilder<W>) -> Result<(), Error> {
         let mut out = Vec::new();
         out.write_all(&self.encode::<LittleEndian>()?)?;
         index_builder.write_metadata(&out)?;

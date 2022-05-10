@@ -1,14 +1,18 @@
 pub mod item;
 
 use self::item::IndexTerm;
-use crate::{error::Error, index::IndexBuilder, traits::Encodable};
+use crate::{
+    build::{output::OutputBuilder, term_store::TermStoreBuilder},
+    error::Error,
+    traits::Encodable,
+};
 use byteorder::LittleEndian;
 use indexed_file::{
     any::IndexedReader, index::Header as IndexHeader, index::Index as FileIndex, Indexable,
     IndexableFile, ReadByLine,
 };
 use std::{
-    io::{BufReader, Read, Seek, SeekFrom},
+    io::{BufReader, Read, Seek, SeekFrom, Write},
     sync::Arc,
 };
 
@@ -86,22 +90,29 @@ impl TermIndexer {
         })
     }
 
-    /// Build a new term indexer for language `lang` using JMdict.
-    pub(crate) fn build<T>(
-        index_builder: &mut IndexBuilder,
-        tot_documents: usize,
-        terms: T,
-    ) -> Result<Self, Error>
-    where
-        T: Iterator<Item = IndexTerm>,
-    {
+    /// Builds a new TermIndexer from TermStoreBuilder and writes it into an OutputBuilder.
+    /// This requires the terms to be sorted
+    pub(crate) fn build_from_termstore<W: Write>(
+        term_store: TermStoreBuilder,
+        index_builder: &mut OutputBuilder<W>,
+    ) -> Result<(), Error> {
         let mut index = Vec::new();
         let mut text = Vec::new();
 
-        let mut terms = terms.collect::<Vec<_>>();
-        terms.sort_by(|a, b| a.text().cmp(b.text()));
+        let mut terms = term_store
+            .terms()
+            .iter()
+            .map(|(term, id)| {
+                let doc_freq = term_store.doc_frequencies().get(id).unwrap();
+                let term = IndexTerm::new(term.to_string(), *doc_freq);
+                let pos = term_store.get_sorted_term_pos(*id);
+                (pos, term)
+            })
+            .collect::<Vec<_>>();
 
-        for term in terms {
+        terms.sort_by(|a, b| a.0.cmp(&b.0));
+
+        for (_, term) in terms {
             index.push(text.len() as u32);
             text.extend(term.encode::<LittleEndian>()?);
         }
@@ -113,11 +124,12 @@ impl TermIndexer {
         let mut data = Vec::new();
         indexed_terms.write_to(&mut data)?;
         index_builder.write_term_indexer(&data)?;
+        Ok(())
+    }
 
-        Ok(Self {
-            index: indexed_terms,
-            tot_documents,
-        })
+    #[inline]
+    pub fn get_term(&self, term: &str) -> Option<usize> {
+        binary_search(&mut self.index.clone(), term)
     }
 }
 
@@ -130,15 +142,6 @@ pub fn binary_search(index: &mut IndexedReader<Vec<u8>>, query: &str) -> Option<
 
 /*
 impl document::Indexable for TermIndexer {
-    #[inline]
-    fn index(&self, part: &str) -> Option<usize> {
-        binary_search(&mut self.index.clone(), part)
-    }
-
-    #[inline]
-    fn index_size(&self) -> usize {
-        indexed_file::Indexable::total_lines(&self.index)
-    }
 
     #[inline]
     fn document_count(&self) -> usize {

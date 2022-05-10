@@ -22,7 +22,7 @@ pub struct DocumentVector<D> {
 impl<D> DocumentVector<D> {
     /// Create a new DocumentVector from a document and its vector
     #[inline(always)]
-    pub fn new_from_vector(document: D, vec: Vector) -> Self {
+    pub fn new(document: D, vec: Vector) -> Self {
         Self { document, vec }
     }
 
@@ -39,6 +39,11 @@ impl<D> DocumentVector<D> {
     #[inline(always)]
     pub fn overlaps_with(&self, other: &Self) -> bool {
         self.vec.overlaps_with(&other.vec)
+    }
+
+    #[inline]
+    pub(crate) fn set_vec(&mut self, new_vec: Vector) {
+        self.vec = new_vec
     }
 }
 
@@ -109,6 +114,6 @@ impl<D: Decodable> Decodable for DocumentVector<D> {
 
         let vec = Vector::new_raw(dimensions, vec_length);
 
-        Ok(DocumentVector::new_from_vector(doc, vec))
+        Ok(DocumentVector::new(doc, vec))
     }
 }

@@ -8,14 +8,17 @@ pub struct IndexTerm {
     /// The terms text/value
     text: String,
     /// number of documents with this term
-    frequency: u32,
+    doc_frequency: u32,
 }
 
 impl IndexTerm {
     /// Creates a new term
     #[inline]
-    pub fn new(text: String, frequency: u32) -> IndexTerm {
-        Self { text, frequency }
+    pub fn new(text: String, doc_frequency: u32) -> IndexTerm {
+        Self {
+            text,
+            doc_frequency,
+        }
     }
 
     /// Decodes an index item from raw data. Panics if the data is malformed
@@ -23,7 +26,10 @@ impl IndexTerm {
     pub fn decode(data: &[u8]) -> Self {
         let frequency = u32::from_le_bytes(data[0..4].try_into().unwrap());
         let text = String::from_utf8_lossy(&data[4..]).to_string();
-        Self { text, frequency }
+        Self {
+            text,
+            doc_frequency: frequency,
+        }
     }
 
     /// Get a reference to the index item's text.
@@ -34,8 +40,8 @@ impl IndexTerm {
 
     /// Get the index item's frequency.
     #[inline]
-    pub fn frequency(&self) -> u32 {
-        self.frequency
+    pub fn doc_frequency(&self) -> u32 {
+        self.doc_frequency
     }
 }
 
@@ -51,7 +57,7 @@ impl Encodable for IndexTerm {
     fn encode<T: byteorder::ByteOrder>(&self) -> Result<Vec<u8>, Error> {
         let text = self.text.as_bytes();
         let mut out = Vec::with_capacity(text.len() + 4);
-        out.write_u32::<T>(self.frequency)?;
+        out.write_u32::<T>(self.doc_frequency)?;
         out.extend(text);
         Ok(out)
     }
