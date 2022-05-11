@@ -45,6 +45,8 @@ pub trait Metadata: Encodable + Decodable {
     fn get_version(&self) -> IndexVersion;
     fn get_document_count(&self) -> usize;
 
+    fn set_document_count(&mut self, count: usize);
+
     /// Loads an existing Metadata file
     fn load<R: Read>(mut reader: R) -> Result<Self, Error> {
         let mut buf = vec![];
@@ -57,7 +59,12 @@ pub trait Metadata: Encodable + Decodable {
 /// within this crate.
 pub(crate) trait MetadataBuild: Metadata {
     /// Builds a new Metadata file
-    fn build<W: Write>(&self, index_builder: &mut OutputBuilder<W>) -> Result<(), Error> {
+    fn build<W: Write>(
+        &mut self,
+        index_builder: &mut OutputBuilder<W>,
+        doc_count: usize,
+    ) -> Result<(), Error> {
+        self.set_document_count(doc_count);
         let mut out = Vec::new();
         out.write_all(&self.encode::<LittleEndian>()?)?;
         index_builder.write_metadata(&out)?;
@@ -76,10 +83,10 @@ pub struct DefaultMetadata {
 
 impl DefaultMetadata {
     /// Creates a new `Metadata` with the given values
-    pub fn new(version: IndexVersion, document_count: usize) -> Self {
+    pub fn new(version: IndexVersion) -> Self {
         Self {
             version,
-            document_count,
+            document_count: 0,
         }
     }
 }
@@ -91,6 +98,10 @@ impl Metadata for DefaultMetadata {
 
     fn get_document_count(&self) -> usize {
         self.document_count
+    }
+
+    fn set_document_count(&mut self, count: usize) {
+        self.document_count = count;
     }
 }
 

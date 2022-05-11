@@ -8,12 +8,14 @@ use flate2::read::GzDecoder;
 use tar::Entry;
 
 use crate::{
+    build::weights::TermWeight,
     dim_map::{self, DimVecMap},
     error::Error,
     metadata::{self, Metadata},
     term_store::{self, TermIndexer},
     traits::Decodable,
     vector_store::{self, VectorStore},
+    Vector,
 };
 
 type Result<T> = std::result::Result<T, Error>;
@@ -50,6 +52,34 @@ impl<D: Decodable, M: Metadata> Index<D, M> {
     }
 
     // TODO: add function to create new vectors (incl. weights)
+    pub fn build_vector<W: TermWeight, S: AsRef<str>>(
+        &self,
+        terms: &[S],
+        weight: Option<W>,
+    ) -> Option<Vector> {
+        let terms: Vec<_> = terms
+            .iter()
+            .filter_map(|i| {
+                let item_pos = self.indexer.get_term(i.as_ref())?;
+                let item = self.indexer.clone().load_term(item_pos)?;
+                Some((item_pos, item))
+            })
+            .map(|(pos, i)| {
+                let mut res_weight = 1.0;
+                if let Some(w) = weight.as_ref() {
+                    res_weight =
+                        w.weight(1.0, 1, i.doc_frequency() as usize, self.vector_store.len());
+                }
+                (pos as u32, res_weight)
+            })
+            .collect();
+
+        if terms.is_empty() {
+            return None;
+        }
+
+        Some(Vector::create_new_raw(terms))
+    }
 
     /// Read an index-archive and build an `Index` out of it
     pub fn from_reader<R: Read>(reader: R) -> Result<Index<D, M>> {

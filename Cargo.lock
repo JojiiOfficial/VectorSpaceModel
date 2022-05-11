@@ -651,7 +651,7 @@ version = "0.1.0"
 source = "git+https://github.com/JojiiOfficial/utilsrs#b0b019f328216bae7ad55faba599eb266cdc4001"
 
 [[package]]
-name = "vector_space_model"
+name = "vector_space_model2"
 version = "0.1.1"
 dependencies = [
  "byteorder",

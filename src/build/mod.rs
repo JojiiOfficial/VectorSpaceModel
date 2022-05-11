@@ -57,17 +57,47 @@ impl<D, T> IndexBuilder<D, T> {
         self.vectors.push(DocumentVector::new(doc, vec));
         doc_id
     }
+
+    /// Creates a new doc-vec and inserts it into the indexer. Returns the ID of the new vec
+    /// Requires `terms` to be free of duplicates
+    pub fn insert_new_weighted_vec<S: AsRef<str>>(&mut self, doc: D, terms: &[(S, f32)]) -> usize {
+        let doc_id = self.vectors.len();
+
+        let dimensions = terms
+            .iter()
+            .map(|(term, weight)| {
+                let term_id = self.terms.get_or_add_term(term.as_ref());
+                self.terms.update_term_freq(term_id, doc_id as u32);
+                (term_id, *weight)
+            })
+            .collect::<Vec<_>>();
+
+        self.terms.update_doc_freq(dimensions.iter().map(|i| i.0));
+
+        let vec = Vector::create_new_raw(dimensions);
+        self.vectors.push(DocumentVector::new(doc, vec));
+        doc_id
+    }
+
+    pub fn insert_custom_vec<F>(&mut self, func: F) -> usize
+    where
+        F: Fn(&mut TermStoreBuilder) -> DocumentVector<D>,
+    {
+        let doc_id = self.vectors.len();
+        self.vectors.push(func(&mut self.terms));
+        doc_id
+    }
 }
 
 impl<D: Decodable + Encodable, T: TermWeight> IndexBuilder<D, T> {
-    pub fn build<M: Metadata, W: Write>(mut self, output: W, metadata: M) -> Result<(), Error> {
+    pub fn build<M: Metadata, W: Write>(mut self, output: W, mut metadata: M) -> Result<(), Error> {
         self.terms.adjust_vecs(&mut self.vectors, &self.term_weight);
 
         let mut out_builder = OutputBuilder::new(output)?;
 
         crate::term_store::TermIndexer::build_from_termstore(self.terms, &mut out_builder)?;
 
-        metadata.build(&mut out_builder)?;
+        metadata.build(&mut out_builder, self.vectors.len())?;
 
         crate::vector_store::build(&mut out_builder, self.vectors)?;
 
@@ -104,5 +134,11 @@ mod test {
             term_store_builder.doc_frequencies().get(&term_a.unwrap()),
             Some(&3)
         );
+    }
+}
+
+impl<D, T> Default for IndexBuilder<D, T> {
+    fn default() -> Self {
+        Self::new()
     }
 }

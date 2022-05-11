@@ -3,20 +3,20 @@ use crate::{DocumentVector, Vector};
 use std::collections::HashMap;
 
 /// Builds a new term storage
-pub(crate) struct TermStoreBuilder {
+pub struct TermStoreBuilder {
     // Maps a term to its ID and frequency
     terms: HashMap<String, u32>,
     // Document frequencies for terms. Maps term-id to amount of docs containing this term
     doc_freq: HashMap<u32, u32>,
     // Term fequency. Frequencies for terms within a given document
     term_freq: HashMap<(u32, u32), u32>,
-
     // Map from ID to final position since terms have to be ordered
     order_map: HashMap<u32, u32>,
 }
 
 impl TermStoreBuilder {
-    pub fn new() -> Self {
+    #[inline]
+    pub(crate) fn new() -> Self {
         Self {
             terms: HashMap::new(),
             doc_freq: HashMap::new(),
@@ -85,7 +85,7 @@ impl TermStoreBuilder {
 
     pub fn adjust_vecs<D, T: TermWeight>(
         &mut self,
-        ves: &mut Vec<DocumentVector<D>>,
+        ves: &mut [DocumentVector<D>],
         weight: &Option<T>,
     ) {
         self.build_order_map();
@@ -104,7 +104,7 @@ impl TermStoreBuilder {
                     if let Some(w) = weight {
                         let tf = self.get_term_freq(old_dim, doc_id as u32).unwrap_or(0) as usize;
                         let df = self.doc_freq.get(&old_dim).copied().unwrap_or(0) as usize;
-                        return (*new_dim, w.weight(tf, df, doc_count));
+                        return (*new_dim, w.weight(old_weight, tf, df, doc_count));
                     }
 
                     (*new_dim, old_weight)
@@ -120,7 +120,7 @@ impl TermStoreBuilder {
         self.order_map.reserve(self.terms.len());
 
         let mut term_vec: Vec<_> = self.terms.iter().map(|(term, id)| (term, *id)).collect();
-        term_vec.sort_by(|a, b| a.0.cmp(&b.0));
+        term_vec.sort_by(|a, b| a.0.cmp(b.0));
 
         for (pos, (_, id)) in term_vec.into_iter().enumerate() {
             self.order_map.insert(id, pos as u32);
