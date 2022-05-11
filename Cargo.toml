@@ -22,7 +22,7 @@ criterion = "0.3.5"
 rand = "0.8.5"
 
 [[bench]]
-name = "document_vector"
+name = "vector"
 harness = false
 
 [[bench]]

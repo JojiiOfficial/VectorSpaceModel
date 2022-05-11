@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use vector_space_model::term_store::item::IndexTerm;
+use vector_space_model2::term_store::item::IndexTerm;
 
 fn index_item_decode(c: &mut Criterion) {
     let mut data = vec![];

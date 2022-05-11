@@ -2,10 +2,16 @@ use std::{convert::TryFrom, io::Read};
 
 use byteorder::{ByteOrder, ReadBytesExt, WriteBytesExt};
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use vector_space_model::{error::Error, index::Index, metadata::IndexVersion, traits::Decodable};
+use vector_space_model2::{
+    error::Error, index::Index, metadata::IndexVersion, traits::Decodable, DefaultMetadata,
+};
+
+fn get_index() -> Index<Vec<u32>, DefaultMetadata> {
+    Index::<Vec<u32>, DefaultMetadata>::open("./out_index_de").unwrap()
+}
 
 fn get_all(c: &mut Criterion) {
-    let index = Index::<Document, Metadata>::open("./out_index_de").unwrap();
+    let index = get_index();
     let vec_store = index.get_vector_store();
 
     c.bench_function("get all", |b| {
@@ -16,7 +22,7 @@ fn get_all(c: &mut Criterion) {
 }
 
 fn get_mult(c: &mut Criterion) {
-    let index = Index::<Document, Metadata>::open("./out_index_de").unwrap();
+    let index = get_index();
     let vec_store = index.get_vector_store();
 
     c.bench_function("get multiple indiv", |b| {
@@ -31,7 +37,7 @@ fn get_mult(c: &mut Criterion) {
 }
 
 fn get(c: &mut Criterion) {
-    let index = Index::<Document, Metadata>::open("./out_index_de").unwrap();
+    let index = Index::<Vec<u32>, DefaultMetadata>::open("./out_index_de").unwrap();
     let term_indexer = index.get_indexer();
     let vec_store = index.get_vector_store();
 
@@ -39,24 +45,6 @@ fn get(c: &mut Criterion) {
         let t = term_indexer.get_term("einer").unwrap();
         b.iter(|| vec_store.clone().get_in_dim(t as u32))
     });
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Document {
-    pub seq_ids: Vec<u32>,
-}
-
-impl Decodable for Document {
-    #[inline(always)]
-    fn decode<T: ByteOrder, R: Read>(mut data: R) -> Result<Self, vector_space_model::Error> {
-        let seq_id_count = data.read_u16::<T>()?;
-
-        let seq_ids = (0..seq_id_count)
-            .map(|_| data.read_u32::<T>())
-            .collect::<Result<_, _>>()?;
-
-        Ok(Self { seq_ids })
-    }
 }
 
 /// Various metadata for the given Index
@@ -79,7 +67,7 @@ impl Metadata {
     }
 }
 
-impl vector_space_model::metadata::Metadata for Metadata {
+impl vector_space_model2::metadata::Metadata for Metadata {
     #[inline]
     fn get_version(&self) -> IndexVersion {
         self.version
@@ -89,9 +77,13 @@ impl vector_space_model::metadata::Metadata for Metadata {
     fn get_document_count(&self) -> usize {
         self.document_count
     }
+
+    fn set_document_count(&mut self, count: usize) {
+        self.document_count = count;
+    }
 }
 
-impl vector_space_model::traits::Encodable for Metadata {
+impl vector_space_model2::traits::Encodable for Metadata {
     fn encode<T: ByteOrder>(&self) -> Result<Vec<u8>, Error> {
         let mut out = vec![];
 

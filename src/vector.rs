@@ -91,9 +91,9 @@ impl Vector {
     }
 
     /// Returns true if vector has a certain dimension
-    #[inline]
+    #[inline(always)]
     pub fn has_dim(&self, dim: u32) -> bool {
-        self.vec_indices().any(|i| i == dim)
+        self.inner.binary_search_by(|a| a.0.cmp(&dim)).is_ok()
     }
 
     /// Update the vector values

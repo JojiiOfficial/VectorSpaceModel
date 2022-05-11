@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use vector_space_model::vector::Vector;
+use vector_space_model2::Vector;
 
 fn get_word_vector(size: usize, seed: usize) -> Vector {
     let values = (seed / size % 10..)
@@ -9,10 +9,15 @@ fn get_word_vector(size: usize, seed: usize) -> Vector {
         .map(|i| (i as u32, i as f32))
         .take(size)
         .collect();
+    Vector::create_new_raw(values)
+}
 
-    let mut vec = Vector::new_raw(values, 100f32);
-    vec.update();
-    vec
+fn has_dim(c: &mut Criterion) {
+    let vec_short = get_word_vector(2, 185692);
+    c.bench_function("has_dim short", |b| b.iter(|| vec_short.has_dim(10)));
+
+    let vec_long = get_word_vector(50, 185692);
+    c.bench_function("has_dim long", |b| b.iter(|| vec_long.has_dim(10)));
 }
 
 fn similarity(c: &mut Criterion) {
@@ -38,5 +43,5 @@ fn overlapping(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, overlapping, similarity);
+criterion_group!(benches, overlapping, similarity, has_dim);
 criterion_main!(benches);
