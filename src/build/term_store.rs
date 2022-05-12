@@ -31,6 +31,13 @@ impl TermStoreBuilder {
         self.terms.get(term).copied()
     }
 
+    /// Returns a term from the Term store or `None` if term does not exist
+    #[inline]
+    pub fn get_doc_frequency(&self, term: &str) -> Option<u32> {
+        let id = self.terms.get(term)?;
+        self.doc_freq.get(id).copied()
+    }
+
     /// Returns or creates a new term
     #[inline]
     pub fn get_or_add_term(&mut self, term: &str) -> u32 {
@@ -83,10 +90,10 @@ impl TermStoreBuilder {
         *self.order_map.get(&term).unwrap()
     }
 
-    pub fn adjust_vecs<D, T: TermWeight>(
+    pub fn adjust_vecs<D>(
         &mut self,
         ves: &mut [DocumentVector<D>],
-        weight: &Option<T>,
+        weight: &Option<Box<dyn TermWeight>>,
     ) {
         self.build_order_map();
 

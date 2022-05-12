@@ -95,7 +95,7 @@ impl TermIndexer {
     pub(crate) fn build_from_termstore<W: Write>(
         term_store: TermStoreBuilder,
         index_builder: &mut OutputBuilder<W>,
-    ) -> Result<(), Error> {
+    ) -> Result<Self, Error> {
         let mut index = Vec::new();
         let mut text = Vec::new();
 
@@ -124,12 +124,31 @@ impl TermIndexer {
         let mut data = Vec::new();
         indexed_terms.write_to(&mut data)?;
         index_builder.write_term_indexer(&data)?;
-        Ok(())
+
+        Ok(Self {
+            index: indexed_terms,
+            tot_documents: 0,
+        })
     }
 
     #[inline]
     pub fn get_term(&self, term: &str) -> Option<usize> {
         binary_search(&mut self.index.clone(), term)
+    }
+
+    #[cfg(feature = "genbktree")]
+    pub fn gen_term_tree(&self) -> bktree::BkTree<String> {
+        let mut index = self.index.clone();
+        let mut terms = Vec::with_capacity(index.total_lines());
+
+        for i in 0..index.total_lines() {
+            let mut buf = Vec::with_capacity(6);
+            index.read_line_raw(i, &mut buf).unwrap();
+            let index_item = IndexTerm::decode(&buf);
+            terms.push(index_item.text().to_string());
+        }
+
+        terms.into_iter().collect::<bktree::BkTree<_>>()
     }
 }
 

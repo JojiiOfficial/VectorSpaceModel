@@ -16,6 +16,7 @@ compressed_vec = { git = "https://github.com/JojiiOfficial/CompressedVec" }
 byteorder = "1.4.3"
 tar = "0.4.38"
 flate2 = "1.0.23"
+bktree = { git = "https://github.com/JojiiOfficial/bktree", optional = true}
 
 [dev-dependencies]
 criterion = "0.3.5"
@@ -32,3 +33,7 @@ harness = false
 [[bench]]
 name = "term_indexer"
 harness = false
+
+[features]
+default = []
+genbktree = ["bktree"]

@@ -41,6 +41,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "bktree"
+version = "1.0.1"
+source = "git+https://github.com/JojiiOfficial/bktree#6b63c3551ad5173848b39cb6579780f86a7cb131"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "bstr"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -559,6 +567,9 @@ name = "serde"
 version = "1.0.137"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61ea8d54c77f8315140a05f4c7237403bf38b72704d031543aa1d16abbf517d1"
+dependencies = [
+ "serde_derive",
+]
 
 [[package]]
 name = "serde_cbor"
@@ -654,6 +665,7 @@ source = "git+https://github.com/JojiiOfficial/utilsrs#b0b019f328216bae7ad55faba
 name = "vector_space_model2"
 version = "0.1.1"
 dependencies = [
+ "bktree",
  "byteorder",
  "compressed_vec",
  "criterion",

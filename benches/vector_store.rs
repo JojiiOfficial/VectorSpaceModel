@@ -16,8 +16,8 @@ fn get_all(c: &mut Criterion) {
 
     c.bench_function("get all", |b| {
         let to_get = vec![12073, 26015, 54225, 56717, 123781, 125995, 126438, 126515];
-
-        b.iter(|| vec_store.clone().get_in_dims(black_box(&to_get)))
+        let mut v_store = vec_store.clone();
+        b.iter(|| v_store.get_all_iter(black_box(&to_get)).collect::<Vec<_>>())
     });
 }
 
@@ -42,7 +42,7 @@ fn get(c: &mut Criterion) {
     let vec_store = index.get_vector_store();
 
     c.bench_function("get single", |b| {
-        let t = term_indexer.get_term("einer").unwrap();
+        let t = term_indexer.get_term("jonas").unwrap();
         b.iter(|| vec_store.clone().get_in_dim(t as u32))
     });
 }

@@ -37,6 +37,11 @@ impl<D> DocumentVector<D> {
     }
 
     #[inline(always)]
+    pub fn vector_mut(&mut self) -> &mut Vector {
+        &mut self.vec
+    }
+
+    #[inline(always)]
     pub fn overlaps_with(&self, other: &Self) -> bool {
         self.vec.overlaps_with(&other.vec)
     }

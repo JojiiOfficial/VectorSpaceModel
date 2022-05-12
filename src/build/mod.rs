@@ -5,6 +5,7 @@ pub mod weights;
 use crate::{
     build::output::OutputBuilder,
     metadata::{Metadata, MetadataBuild},
+    term_store::TermIndexer,
     traits::{Decodable, Encodable},
     DocumentVector, Error, Vector,
 };
@@ -14,13 +15,15 @@ use term_store::TermStoreBuilder;
 use self::weights::TermWeight;
 
 /// Helper for building new indexes
-pub struct IndexBuilder<D, T> {
+pub struct IndexBuilder<D> {
     vectors: Vec<DocumentVector<D>>,
     terms: TermStoreBuilder,
-    term_weight: Option<T>,
+    term_weight: Option<Box<dyn TermWeight>>,
+    output_filter:
+        Option<Box<dyn Fn(DocumentVector<D>, &TermIndexer) -> Option<DocumentVector<D>> + 'static>>,
 }
 
-impl<D, T> IndexBuilder<D, T> {
+impl<D> IndexBuilder<D> {
     /// Create a new Indexer
     #[inline]
     pub fn new() -> Self {
@@ -28,11 +31,20 @@ impl<D, T> IndexBuilder<D, T> {
             vectors: vec![],
             terms: TermStoreBuilder::new(),
             term_weight: None,
+            output_filter: None,
         }
     }
 
-    pub fn with_weight(mut self, weight: T) -> Self {
-        self.term_weight = Some(weight);
+    pub fn with_weight<U: TermWeight + 'static>(mut self, weight: U) -> Self {
+        self.term_weight = Some(Box::new(weight));
+        self
+    }
+
+    pub fn with_filter<F>(mut self, filter: F) -> Self
+    where
+        F: Fn(DocumentVector<D>, &TermIndexer) -> Option<DocumentVector<D>> + 'static,
+    {
+        self.output_filter = Some(Box::new(filter));
         self
     }
 
@@ -87,19 +99,37 @@ impl<D, T> IndexBuilder<D, T> {
         self.vectors.push(func(&mut self.terms));
         doc_id
     }
+
+    /// Returns the current amount of vectors in the builder
+    #[inline]
+    pub fn vec_count(&self) -> usize {
+        self.vectors.len()
+    }
 }
 
-impl<D: Decodable + Encodable, T: TermWeight> IndexBuilder<D, T> {
+impl<D: Decodable + Encodable> IndexBuilder<D> {
     pub fn build<M: Metadata, W: Write>(mut self, output: W, mut metadata: M) -> Result<(), Error> {
-        self.terms.adjust_vecs(&mut self.vectors, &self.term_weight);
+        let mut vecs = self.vectors;
+        let mut len = vecs.len();
+
+        self.terms.adjust_vecs(&mut vecs, &self.term_weight);
 
         let mut out_builder = OutputBuilder::new(output)?;
 
-        crate::term_store::TermIndexer::build_from_termstore(self.terms, &mut out_builder)?;
+        let indexer =
+            crate::term_store::TermIndexer::build_from_termstore(self.terms, &mut out_builder)?;
 
-        metadata.build(&mut out_builder, self.vectors.len())?;
+        if let Some(filter) = self.output_filter {
+            vecs = vecs
+                .into_iter()
+                .filter_map(|vec| filter(vec, &indexer))
+                .collect::<Vec<_>>();
+            len = vecs.len();
+        }
 
-        crate::vector_store::build(&mut out_builder, self.vectors)?;
+        metadata.build(&mut out_builder, len)?;
+
+        crate::vector_store::build(&mut out_builder, vecs)?;
 
         out_builder.finish()?;
 
@@ -119,7 +149,7 @@ mod test {
             &["to", "make", "a", "stand", "a"],
         ];
 
-        let mut indexer = IndexBuilder::<_, ()>::new();
+        let mut indexer = IndexBuilder::new();
 
         for (pos, terms) in insert_documents.iter().enumerate() {
             indexer.insert_new_vec(pos, *terms);
@@ -137,7 +167,7 @@ mod test {
     }
 }
 
-impl<D, T> Default for IndexBuilder<D, T> {
+impl<D> Default for IndexBuilder<D> {
     fn default() -> Self {
         Self::new()
     }

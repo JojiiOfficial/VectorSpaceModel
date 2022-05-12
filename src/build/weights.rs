@@ -1,4 +1,4 @@
-pub trait TermWeight {
+pub trait TermWeight: Send + Sync {
     /// Calculates the weight of a term.
     /// tf - Term frequency (frequency in the given document)
     /// df - Document frequency (document count with this term)

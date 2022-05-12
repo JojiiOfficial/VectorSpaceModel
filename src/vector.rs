@@ -1,3 +1,5 @@
+use std::slice::IterMut;
+
 use crate::lock_step::LockStepIter;
 
 /// A compressed n dimensional vector
@@ -124,13 +126,16 @@ impl Vector {
         self.inner.iter().map(|i| i.1)
     }
 
-    /*
     /// Deletes a given dimension and its value from the vector
     #[inline]
-    fn delete_dim(&mut self, dim: u32) {
+    pub fn delete_dim(&mut self, dim: u32) {
         self.inner.retain(|(curr_dim, _)| *curr_dim == dim);
     }
-    */
+
+    #[inline]
+    pub fn sparse_iter_mut(&mut self) -> IterMut<(u32, f32)> {
+        self.inner.iter_mut()
+    }
 
     #[inline]
     fn scalar(&self, other: &Vector) -> f32 {

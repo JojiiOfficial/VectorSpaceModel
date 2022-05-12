@@ -52,10 +52,27 @@ impl<D: Decodable, M: Metadata> Index<D, M> {
     }
 
     // TODO: add function to create new vectors (incl. weights)
-    pub fn build_vector<W: TermWeight, S: AsRef<str>>(
+    pub fn build_vector_weights<S: AsRef<str>>(&self, terms: &[(S, f32)]) -> Option<Vector> {
+        let terms: Vec<_> = terms
+            .iter()
+            .filter_map(|(term, weight)| {
+                let item_pos = self.indexer.get_term(term.as_ref())?;
+                Some((item_pos as u32, *weight))
+            })
+            .collect();
+
+        if terms.is_empty() {
+            return None;
+        }
+
+        Some(Vector::create_new_raw(terms))
+    }
+
+    // TODO: add function to create new vectors (incl. weights)
+    pub fn build_vector<S: AsRef<str>>(
         &self,
         terms: &[S],
-        weight: Option<W>,
+        weight: Option<&dyn TermWeight>,
     ) -> Option<Vector> {
         let terms: Vec<_> = terms
             .iter()
