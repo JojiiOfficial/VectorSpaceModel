@@ -1,9 +1,11 @@
 use std::slice::IterMut;
 
+use serde::{Deserialize, Serialize};
+
 use crate::lock_step::LockStepIter;
 
 /// A compressed n dimensional vector
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Vector {
     /// Dimensions mapped to values
     inner: Vec<(u32, f32)>,
