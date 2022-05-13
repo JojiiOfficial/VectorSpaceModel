@@ -83,7 +83,7 @@ impl TermIndexer {
     /// Returns an iterator over all Indexed terms
     pub fn iter(&self) -> impl Iterator<Item = IndexTerm> + '_ {
         let mut reader = self.index.clone();
-        (0..self.index.total_lines()).map(move |i| {
+        (0..reader.total_lines()).map(move |i| {
             let mut buf = Vec::with_capacity(10);
             reader.read_line_raw(i, &mut buf).unwrap();
             IndexTerm::decode(&buf)

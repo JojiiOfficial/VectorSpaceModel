@@ -129,7 +129,7 @@ impl Vector {
     /// Deletes a given dimension and its value from the vector
     #[inline]
     pub fn delete_dim(&mut self, dim: u32) {
-        self.inner.retain(|(curr_dim, _)| *curr_dim == dim);
+        self.inner.retain(|(curr_dim, _)| *curr_dim != dim);
     }
 
     #[inline]

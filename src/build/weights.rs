@@ -10,7 +10,7 @@ pub struct TFIDF;
 impl TermWeight for TFIDF {
     #[inline]
     fn weight(&self, _current: f32, tf: usize, df: usize, total_docs: usize) -> f32 {
-        let idf = (total_docs as f32 / df as f32).log10();
+        let idf = (total_docs as f32 / df as f32 + 1.0).log10();
         ((tf as f32).log10() + 1.0) * idf
     }
 }
