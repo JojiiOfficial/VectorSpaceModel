@@ -74,18 +74,24 @@ impl Vector {
     /// Returns `true` if both vectors have at least one dimension in common
     #[inline]
     pub fn overlaps_with(&self, other: &Vector) -> bool {
-        // little speedup
-        if self.is_empty()
-            || other.is_empty()
-            || self.first_indice() > other.last_indice()
-            || self.last_indice() < other.first_indice()
-        {
+        if !self.could_overlap(other) {
             return false;
         }
 
         LockStepIter::new(self.inner.iter().copied(), other.inner.iter().copied())
             .next()
             .is_some()
+    }
+
+    /// Returns `true` if both vectors could potentionally have overlapping vectors
+    #[inline]
+    pub fn could_overlap(&self, other: &Vector) -> bool {
+        let cant_overlap = self.is_empty()
+            || other.is_empty()
+            || self.first_indice() > other.last_indice()
+            || self.last_indice() < other.first_indice();
+
+        !cant_overlap
     }
 
     /// Returns the amount of dimensions the vector uses
