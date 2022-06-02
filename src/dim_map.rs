@@ -80,6 +80,19 @@ impl DimVecMap {
             .and_then(|i| (!i.is_empty()).then(|| 0))
             .is_some()
     }
+
+    /*
+    pub(crate) fn to_map(&self) -> DimToVecs {
+        let mut map = HashMap::<u32, Vec<u32>>::with_capacity(self.index.len());
+
+        for dim in 0..self.index.len() {
+            let get = self.get(dim as u32).unwrap();
+            map.insert(dim as u32, get);
+        }
+
+        map
+    }
+    */
 }
 
 pub type DimToVecs = HashMap<u32, Vec<u32>>;

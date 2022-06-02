@@ -15,7 +15,7 @@ indexed_file = { git = "https://github.com/JojiiOfficial/IndexedFile" }
 compressed_vec = { git = "https://github.com/JojiiOfficial/CompressedVec" }
 byteorder = "1.4.3"
 tar = "0.4.38"
-flate2 = {version = "1.0.24", default-features = false, features = ["zlib-ng"]}
+flate2 = { version = "1.0.24", default-features = false, features = ["zlib-ng"] }
 bktree = { git = "https://github.com/JojiiOfficial/bktree", optional = true}
 serde = { version = "1.0.137", features = ["derive"] }
 

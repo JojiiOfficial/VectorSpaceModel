@@ -1,13 +1,8 @@
 use std::{
-    cmp::min,
     collections::HashMap,
-    future::Future,
     io::{BufReader, Cursor, Read, Seek, SeekFrom, Write},
     marker::PhantomData,
-    mem,
-    pin::Pin,
     sync::Arc,
-    task::{Context, Poll},
 };
 
 use byteorder::LittleEndian;
@@ -171,94 +166,6 @@ fn load_vector_reader<D: Decodable>(
     DocumentVector::decode::<LittleEndian, _>(Cursor::new(buf))
 }
 
-impl<D: Decodable + Unpin> VectorStore<D> {
-    /// Returns all vectors in `dimension`
-    pub async fn get_async(&mut self, dimension: u32) -> Result<Vec<DocumentVector<D>>, Error> {
-        let vec_refs = self.get_map().get(dimension).unwrap_or_default();
-        self.load_vecs_async(vec_refs).await
-    }
-
-    /// Returns all vectors in given dimensions efficiently
-    pub async fn get_all_async(
-        &mut self,
-        dimensions: &[u32],
-    ) -> Result<Vec<DocumentVector<D>>, Error> {
-        let vec_refs = self.get_in_dims(dimensions);
-        self.load_vecs_async(vec_refs).await
-    }
-
-    /// Loads all vectors by their references
-    async fn load_vecs_async(&self, vec_refs: Vec<u32>) -> Result<Vec<DocumentVector<D>>, Error> {
-        if vec_refs.is_empty() {
-            return Ok(vec![]);
-        }
-
-        AsyncDocRetrieval::new(vec_refs, self.store.clone()).await
-    }
-}
-
-/// Load document vectors asynchronously by chunking the load process into small pieces
-struct AsyncDocRetrieval<D: Decodable + Unpin> {
-    vec_refs: Vec<u32>,
-    store: IndexedReader<Vec<u8>>,
-    vec_type: PhantomData<D>,
-    out: Vec<DocumentVector<D>>,
-    last_pos: usize,
-}
-
-impl<D: Decodable + Unpin> AsyncDocRetrieval<D> {
-    #[inline(always)]
-    fn new(vec_refs: Vec<u32>, store: IndexedReader<Vec<u8>>) -> Self {
-        Self {
-            // output
-            out: Vec::with_capacity(vec_refs.len()),
-            last_pos: 0,
-
-            // input
-            store,
-            vec_refs,
-            vec_type: PhantomData,
-        }
-    }
-}
-
-impl<D: Decodable + Unpin> Future for AsyncDocRetrieval<D> {
-    type Output = Result<Vec<DocumentVector<D>>, Error>;
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let start = self.last_pos;
-        let mut buf = Vec::with_capacity(40);
-
-        if start >= self.vec_refs.len() {
-            return Poll::Ready(Ok(mem::take(&mut self.out)));
-        }
-
-        // ensure we're not going further than `self.vec_refs.len()`
-        let end = min(self.vec_refs.len(), self.last_pos + 200);
-
-        for vec_pos in start..end {
-            let vec_id = self.vec_refs[vec_pos];
-            if let Err(err) = self.store.read_line_raw(vec_id as usize, &mut buf) {
-                return Poll::Ready(Err(err.into()));
-            }
-
-            let dv = match DocumentVector::<D>::decode::<LittleEndian, _>(Cursor::new(&buf)) {
-                Ok(v) => v,
-                Err(err) => return Poll::Ready(Err(err)),
-            };
-
-            self.out.push(dv);
-            buf.clear();
-        }
-
-        self.last_pos = end;
-
-        cx.waker().wake_by_ref();
-
-        Poll::Pending
-    }
-}
-
 /// Creates a new DocumentStore using a with `build` generated DocumentStore.
 pub(crate) fn build<D: Encodable, W: Write>(
     index_builder: &mut OutputBuilder<W>,
@@ -293,4 +200,42 @@ pub(crate) fn build<D: Encodable, W: Write>(
     indexed_vectors.write_to(&mut out)?;
     index_builder.write_vectors(&out)?;
     Ok(())
+}
+
+pub fn build_from_vecs<D: Encodable + Decodable>(
+    vectors: Vec<DocumentVector<D>>,
+) -> Result<VectorStore<D>, Error> {
+    let mut encoded_vectors: Vec<u8> = Vec::new();
+
+    // Map from dimensions to vectors in dimension
+    let mut dim_vec_map: DimToVecs = HashMap::new();
+
+    // Index position for each vector
+    let mut file_index: Vec<u32> = Vec::new();
+
+    for (pos, vector) in vectors.into_iter().enumerate() {
+        // Bulid map from dimension to all vectors in this dimension
+        for dim in vector.vector().vec_indices() {
+            dim_vec_map.entry(dim).or_default().push(pos as u32);
+        }
+
+        file_index.push(encoded_vectors.len() as u32);
+
+        // Encode document vector and push as new line to encoded_documents
+        encoded_vectors.extend(&vector.encode::<LittleEndian>()?);
+    }
+
+    let index = Arc::new(FileIndex::new(file_index).zero_len());
+    let indexed_vectors = IndexedReader::new_custom(encoded_vectors, index);
+
+    let encoded_dv = Cursor::new(NewDimVecMap::new(dim_vec_map).encode::<LittleEndian>()?);
+    let dv_map = DimVecMap::load(encoded_dv)?;
+
+    let vec_store = VectorStore {
+        store: indexed_vectors,
+        map: Some(Arc::new(dv_map)),
+        vec_type: PhantomData::<D>,
+    };
+
+    Ok(vec_store)
 }

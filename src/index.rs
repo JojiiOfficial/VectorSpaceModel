@@ -145,6 +145,11 @@ impl<D: Decodable, M: Metadata> Index<D, M> {
         })
     }
 
+    /// Sets the vector storte
+    pub fn set_vec_store(&mut self, new: VectorStore<D>) {
+        self.vector_store = new;
+    }
+
     fn parse_vector_store<R: Read>(mut entry: Entry<R>, size: u64) -> Result<VectorStore<D>> {
         let mut data = Vec::with_capacity(size as usize);
         entry.read_to_end(&mut data)?;

@@ -1,13 +1,20 @@
 #![allow(unused)]
 
-use crate::{dim_map, error::Error, metadata, term_store, vector_store};
+use crate::{
+    dim_map,
+    error::Error,
+    metadata::{self, Metadata},
+    term_store,
+    traits::{Decodable, Encodable},
+    vector_store, Index,
+};
 use flate2::{write::GzEncoder, Compression};
 use std::{fs::File, io::Write};
 
 type Result<T> = std::result::Result<T, Error>;
 
 /// An crate internal helper for building new index files.
-pub(crate) struct OutputBuilder<W: Write> {
+pub struct OutputBuilder<W: Write> {
     builder: tar::Builder<GzEncoder<W>>,
 }
 

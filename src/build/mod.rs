@@ -40,12 +40,11 @@ impl<D> IndexBuilder<D> {
         self
     }
 
-    pub fn with_filter<F>(mut self, filter: F) -> Self
+    pub fn with_filter<F>(&mut self, filter: F)
     where
         F: Fn(DocumentVector<D>, &TermIndexer) -> Option<DocumentVector<D>> + 'static,
     {
         self.output_filter = Some(Box::new(filter));
-        self
     }
 
     /// Creates a new doc-vec and inserts it into the indexer. Returns the ID of the new vec
@@ -104,6 +103,17 @@ impl<D> IndexBuilder<D> {
     #[inline]
     pub fn vec_count(&self) -> usize {
         self.vectors.len()
+    }
+
+    #[inline]
+    pub fn vecs_mut(&mut self) -> &mut Vec<DocumentVector<D>> {
+        &mut self.vectors
+    }
+
+    /// Get a reference to the index builder's vectors.
+    #[inline]
+    pub fn vectors(&self) -> &[DocumentVector<D>] {
+        self.vectors.as_ref()
     }
 }
 
