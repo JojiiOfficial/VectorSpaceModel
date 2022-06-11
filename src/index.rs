@@ -98,6 +98,18 @@ impl<D: Decodable, M: Metadata> Index<D, M> {
         Some(Vector::create_new_raw(terms))
     }
 
+    pub fn is_stopword_cust(&self, term: &str, threshold: f32) -> Option<bool> {
+        let tot_docs = self.get_indexer().len() as f32;
+        let term = self.get_indexer().clone().find_term(term)?;
+        let ratio = term.doc_frequency() as f32 / tot_docs * 100.0;
+        Some(ratio >= threshold)
+    }
+
+    #[inline]
+    pub fn is_stopword(&self, term: &str) -> Option<bool> {
+        self.is_stopword_cust(term, 65.0)
+    }
+
     /// Read an index-archive and build an `Index` out of it
     pub fn from_reader<R: Read>(reader: R) -> Result<Index<D, M>> {
         let mut archive = tar::Archive::new(GzDecoder::new(reader));
