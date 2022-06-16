@@ -18,8 +18,8 @@ keywords = [
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-#indexed_file = { git = "https://github.com/JojiiOfficial/IndexedFile" }
-indexed_file = { path = "../IndexedFile" }
+indexed_file = { git = "https://github.com/JojiiOfficial/IndexedFile" }
+#indexed_file = { path = "../IndexedFile" }
 compressed_vec = { git = "https://github.com/JojiiOfficial/CompressedVec" }
 byteorder = "1.4.3"
 tar = "0.4.38"
@@ -28,7 +28,7 @@ flate2 = { version = "1.0.24", default-features = false, features = [
 ] }
 bktree = { git = "https://github.com/JojiiOfficial/bktree", optional = true }
 serde = { version = "1.0.137", features = ["derive"] }
-bincode = "*"
+bincode = "1.3.3"
 
 [dev-dependencies]
 criterion = "0.3.5"
