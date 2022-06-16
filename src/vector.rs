@@ -1,8 +1,6 @@
-use std::slice::IterMut;
-
-use serde::{Deserialize, Serialize};
-
 use crate::lock_step::LockStepIter;
+use serde::{Deserialize, Serialize};
+use std::slice::IterMut;
 
 /// A compressed n dimensional vector
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -107,7 +107,7 @@ impl<D: Decodable, M: Metadata> Index<D, M> {
 
     #[inline]
     pub fn is_stopword(&self, term: &str) -> Option<bool> {
-        self.is_stopword_cust(term, 65.0)
+        self.is_stopword_cust(term, 35.0)
     }
 
     /// Read an index-archive and build an `Index` out of it
