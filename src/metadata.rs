@@ -1,14 +1,12 @@
-use std::{
-    convert::TryFrom,
-    io::{Cursor, Read, Write},
-};
-
-use byteorder::{ByteOrder, LittleEndian, ReadBytesExt, WriteBytesExt};
-
 use crate::{
     build::output::OutputBuilder,
     error::Error,
     traits::{Decodable, Encodable},
+};
+use byteorder::{ByteOrder, LittleEndian, ReadBytesExt, WriteBytesExt};
+use std::{
+    convert::TryFrom,
+    io::{Cursor, Read, Write},
 };
 
 /// File name in the index tar

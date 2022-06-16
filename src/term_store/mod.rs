@@ -7,12 +7,10 @@ use crate::{
     traits::Encodable,
 };
 use byteorder::LittleEndian;
-use indexed_file::{
-    any::IndexedReader, index::Header as IndexHeader, index::Index as FileIndex, Indexable,
-    IndexableFile, ReadByLine,
-};
+use indexed_file::mem_file::MemFile;
 use std::{
-    io::{BufReader, Read, Seek, SeekFrom, Write},
+    cmp::Ordering,
+    io::{Read, Seek, Write},
     sync::Arc,
 };
 
@@ -21,9 +19,9 @@ pub(crate) const FILE_NAME: &str = "term_indexer";
 
 /// An in memory TermIndexer that allows efficient indexing of terms which is requried for document
 /// vectors being calculated.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TermIndexer {
-    pub index: IndexedReader<Vec<u8>>,
+    index: Arc<MemFile>,
     tot_documents: usize,
 }
 
@@ -31,18 +29,10 @@ impl TermIndexer {
     /// Creates a new DocumentStore using a with `build` generated DocumentStore.
     /// `term_indexer.set_total_documents(..)` has to be called afterwards
     /// with the correct number of documents.
-    pub fn new<R: Read + Seek + Unpin>(reader: R) -> Result<Self, indexed_file::error::Error> {
-        let mut reader = BufReader::new(reader);
-        let header = IndexHeader::decode(&mut reader)?;
-        let index = FileIndex::decode(&mut reader, &header)?;
-        reader.seek(SeekFrom::Start(index.len_bytes() as u64))?;
-
-        let mut s = Vec::new();
-        reader.read_to_end(&mut s)?;
-        let mem_index = IndexedReader::new_custom(s, Arc::new(index.zero_len()));
-
+    pub fn new<R: Read + Seek + Unpin>(reader: R) -> Result<Self, Error> {
+        let index: MemFile = bincode::deserialize_from(reader)?;
         Ok(TermIndexer {
-            index: mem_index,
+            index: Arc::new(index),
             tot_documents: 0,
         })
     }
@@ -50,7 +40,7 @@ impl TermIndexer {
     /// Returns the total amount of terms in the term index
     #[inline]
     pub fn len(&self) -> usize {
-        self.index.total_lines()
+        self.index.len()
     }
 
     /// Returns `true` if there is no term in the term store
@@ -69,9 +59,8 @@ impl TermIndexer {
     /// Gets a term by its dimension
     #[inline]
     pub fn load_term(&mut self, dimension: usize) -> Option<IndexTerm> {
-        let mut buf = Vec::with_capacity(10);
-        self.index.read_line_raw(dimension, &mut buf).ok()?;
-        Some(IndexTerm::decode(&buf))
+        let res = self.index.get(dimension)?;
+        Some(IndexTerm::decode(res))
     }
 
     /// Sets the total amount of documents in the index. This is required for better indexing
@@ -81,13 +70,9 @@ impl TermIndexer {
     }
 
     /// Returns an iterator over all Indexed terms
+    #[inline]
     pub fn iter(&self) -> impl Iterator<Item = IndexTerm> + '_ {
-        let mut reader = self.index.clone();
-        (0..reader.total_lines()).map(move |i| {
-            let mut buf = Vec::with_capacity(10);
-            reader.read_line_raw(i, &mut buf).unwrap();
-            IndexTerm::decode(&buf)
-        })
+        self.index.iter().map(IndexTerm::decode)
     }
 
     /// Builds a new TermIndexer from TermStoreBuilder and writes it into an OutputBuilder.
@@ -96,9 +81,6 @@ impl TermIndexer {
         term_store: TermStoreBuilder,
         index_builder: &mut OutputBuilder<W>,
     ) -> Result<Self, Error> {
-        let mut index = Vec::new();
-        let mut text = Vec::new();
-
         let mut terms = term_store
             .terms()
             .iter()
@@ -112,51 +94,65 @@ impl TermIndexer {
 
         terms.sort_by(|a, b| a.0.cmp(&b.0));
 
-        for (_, term) in terms {
-            index.push(text.len() as u32);
-            text.extend(term.encode::<LittleEndian>()?);
+        let mut index = MemFile::with_capacity(terms.len());
+        for term in terms {
+            index.insert(&term.1.encode::<LittleEndian>()?);
         }
 
-        let mut indexed_terms =
-            IndexedReader::new_custom(text, Arc::new(FileIndex::new(index).zero_len()));
-
-        // Write term indexer
-        let mut data = Vec::new();
-        indexed_terms.write_to(&mut data)?;
-        index_builder.write_term_indexer(&data)?;
+        index_builder.write_term_indexer(&bincode::serialize(&index)?)?;
 
         Ok(Self {
-            index: indexed_terms,
+            index: Arc::new(index),
             tot_documents: 0,
         })
     }
 
     #[inline]
     pub fn get_term(&self, term: &str) -> Option<usize> {
-        binary_search(&mut self.index.clone(), term)
+        binary_search(&self.index, term)
     }
 
     #[cfg(feature = "genbktree")]
     pub fn gen_term_tree(&self) -> bktree::BkTree<String> {
-        let mut index = self.index.clone();
-        let mut terms = Vec::with_capacity(index.total_lines());
+        let mut terms = Vec::with_capacity(self.index.len());
 
-        for i in 0..index.total_lines() {
-            let mut buf = Vec::with_capacity(6);
-            index.read_line_raw(i, &mut buf).unwrap();
-            let index_item = IndexTerm::decode(&buf);
-            terms.push(index_item.text().to_string());
+        for i in self.index.iter() {
+            terms.push(IndexTerm::decode(&i).text().to_string());
         }
 
         terms.into_iter().collect::<bktree::BkTree<_>>()
     }
 }
 
-#[inline]
-pub fn binary_search(index: &mut IndexedReader<Vec<u8>>, query: &str) -> Option<usize> {
-    index
-        .binary_search_raw_by(|i| IndexTerm::decode(i).text().cmp(query))
-        .ok()
+pub fn binary_search(index: &MemFile, query: &str) -> Option<usize> {
+    binary_search_raw_by(index, |i| IndexTerm::decode(i).text().cmp(query)).ok()
+}
+
+fn binary_search_raw_by<F>(index: &MemFile, f: F) -> Result<usize, usize>
+where
+    F: Fn(&[u8]) -> std::cmp::Ordering,
+{
+    let mut size = index.len();
+    let mut left = 0;
+    let mut right = size;
+
+    while left < right {
+        let mid = left + size / 2;
+
+        let cmp = f(&index.get_unchecked(mid));
+
+        if cmp == Ordering::Less {
+            left = mid + 1;
+        } else if cmp == Ordering::Greater {
+            right = mid;
+        } else {
+            return Ok(mid);
+        }
+
+        size = right - left;
+    }
+
+    Err(left)
 }
 
 /*

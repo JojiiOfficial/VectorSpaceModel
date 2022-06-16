@@ -1,15 +1,13 @@
-use std::{
-    cmp::Ordering,
-    hash::Hash,
-    io::{Read, Write},
-};
-
-use byteorder::{ByteOrder, ReadBytesExt, WriteBytesExt};
-
 use crate::{
     error::Error,
     traits::{Decodable, Encodable},
     vector::Vector,
+};
+use byteorder::{ByteOrder, ReadBytesExt, WriteBytesExt};
+use std::{
+    cmp::Ordering,
+    hash::Hash,
+    io::{Read, Write},
 };
 
 /// A structure representing a document with its calculated document-vector

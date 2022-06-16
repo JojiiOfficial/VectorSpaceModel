@@ -1,12 +1,3 @@
-use std::{
-    fs::File,
-    io::{BufReader, Cursor, Read},
-    path::Path,
-};
-
-use flate2::read::GzDecoder;
-use tar::Entry;
-
 use crate::{
     build::weights::TermWeight,
     dim_map::{self, DimVecMap},
@@ -17,6 +8,13 @@ use crate::{
     vector_store::{self, VectorStore},
     Vector,
 };
+use flate2::read::GzDecoder;
+use std::{
+    fs::File,
+    io::{BufReader, Cursor, Read},
+    path::Path,
+};
+use tar::Entry;
 
 type Result<T> = std::result::Result<T, Error>;
 

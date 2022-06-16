@@ -1,14 +1,14 @@
+use crate::{build::output::OutputBuilder, error::Error, traits::Encodable};
+use byteorder::LittleEndian;
+use compressed_vec::{buffered::BufCVecRef, CVec};
+use indexed_file::{
+    any::CloneableIndexedReader, index::Header as IndexHeader, index::Index, IndexableFile,
+};
 use std::{
     collections::HashMap,
     io::{BufReader, Read, Seek, SeekFrom, Write},
     sync::Arc,
 };
-
-use byteorder::LittleEndian;
-use compressed_vec::{buffered::BufCVecRef, CVec};
-
-use crate::{build::output::OutputBuilder, error::Error, traits::Encodable};
-use indexed_file::{any::IndexedReader, index::Header as IndexHeader, index::Index, IndexableFile};
 
 /// FileName of dim_maps
 pub(crate) const FILE_NAME: &str = "dim_map";
@@ -159,7 +159,7 @@ impl Encodable for NewDimVecMap {
         let data = map_store.as_bytes();
         let mut out = Vec::with_capacity(data.len());
 
-        let mut indexed_vectors = IndexedReader::new_custom(data, index);
+        let mut indexed_vectors = CloneableIndexedReader::new_custom(data, index);
         indexed_vectors.write_to(&mut out).unwrap();
 
         Ok(out)

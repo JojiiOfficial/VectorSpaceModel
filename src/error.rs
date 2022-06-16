@@ -7,6 +7,13 @@ pub enum Error {
     Decode,
     IndexedFile(indexed_file::error::Error),
     InvalidIndex,
+    Bincode(bincode::Error),
+}
+
+impl From<bincode::Error> for Error {
+    fn from(b: bincode::Error) -> Self {
+        Self::Bincode(b)
+    }
 }
 
 impl From<FromUtf8Error> for Error {

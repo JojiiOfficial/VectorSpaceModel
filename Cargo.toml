@@ -6,18 +6,29 @@ license = "AGPL-3.0"
 authors = ["jojii <jojii aT gmx.net>"]
 repository = "https://github.com/JojiiOfficial/VectorSpaceModel"
 description = "Highly efficient vector space model implementation written in rust"
-keywords = ["vector-space-model", "information-retrieval", "information", "retrieval","search", "search-engine"]
+keywords = [
+  "vector-space-model",
+  "information-retrieval",
+  "information",
+  "retrieval",
+  "search",
+  "search-engine",
+]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-indexed_file = { git = "https://github.com/JojiiOfficial/IndexedFile" }
+#indexed_file = { git = "https://github.com/JojiiOfficial/IndexedFile" }
+indexed_file = { path = "../IndexedFile" }
 compressed_vec = { git = "https://github.com/JojiiOfficial/CompressedVec" }
 byteorder = "1.4.3"
 tar = "0.4.38"
-flate2 = { version = "1.0.24", default-features = false, features = ["zlib-ng"] }
-bktree = { git = "https://github.com/JojiiOfficial/bktree", optional = true}
+flate2 = { version = "1.0.24", default-features = false, features = [
+  "zlib-ng",
+] }
+bktree = { git = "https://github.com/JojiiOfficial/bktree", optional = true }
 serde = { version = "1.0.137", features = ["derive"] }
+bincode = "*"
 
 [dev-dependencies]
 criterion = "0.3.5"
