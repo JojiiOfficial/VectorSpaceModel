@@ -33,7 +33,7 @@ fn get_mult(c: &mut Criterion) {
 
         b.iter(|| {
             for i in to_get.iter() {
-                vec_store.clone().get_in_dim(black_box(*i));
+                vec_store.get_in_dim(black_box(*i));
             }
         })
     });
@@ -46,7 +46,7 @@ fn get(c: &mut Criterion) {
 
     c.bench_function("get single", |b| {
         let t = term_indexer.get_term("あ").unwrap();
-        b.iter(|| vec_store.clone().get_in_dim(t as u32))
+        b.iter(|| vec_store.get_in_dim(t as u32))
     });
 }
 
@@ -102,7 +102,7 @@ impl Decodable for Metadata {
     fn decode<T: ByteOrder, R: Read>(mut data: R) -> Result<Self, Error> {
         let version = IndexVersion::try_from(data.read_u8()?)?;
         let document_count = data.read_u64::<T>()? as usize;
-        let lang = data.read_i32::<T>()?;
+        let _lang = data.read_i32::<T>()?;
 
         let language = 0;
 

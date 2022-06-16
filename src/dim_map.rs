@@ -47,11 +47,7 @@ impl DimVecMap {
     /// Returns a vec over all Vector IDs in dimension `dim`
     #[inline]
     pub fn get(&self, dim: u32) -> Option<Vec<u32>> {
-        if dim as usize >= self.index.len() {
-            return None;
-        }
-
-        let arr_start = self.index.get(dim as usize).ok()? as usize;
+        let arr_start = self.index.get2(dim as usize)? as usize;
 
         let mut buf_vec = BufCVecRef::new(&self.data);
 
@@ -76,13 +72,10 @@ impl DimVecMap {
     /// Returns true if there is at least one vector in dimension `dim`
     #[inline]
     pub fn has(&self, dim: u32) -> bool {
-        self.get(dim)
-            .and_then(|i| (!i.is_empty()).then(|| 0))
-            .is_some()
+        self.get(dim).is_some()
     }
 
-    /*
-    pub(crate) fn to_map(&self) -> DimToVecs {
+    pub fn decoded_map(&self) -> DimToVecs {
         let mut map = HashMap::<u32, Vec<u32>>::with_capacity(self.index.len());
 
         for dim in 0..self.index.len() {
@@ -92,7 +85,6 @@ impl DimVecMap {
 
         map
     }
-    */
 }
 
 pub type DimToVecs = HashMap<u32, Vec<u32>>;

@@ -91,6 +91,22 @@ impl<D: Decodable> VectorStore<D> {
         vec_refs
     }
 
+    /// Returns all vectors in given dimensions efficiently via an iterator. May contain duplicates
+    /// If vectors share multiple dimensions with the passed ones
+    pub fn get_all_iter2<'a, I>(
+        &'a self,
+        dimensions: I,
+    ) -> impl Iterator<Item = DocumentVector<D>> + 'a
+    where
+        I: Iterator<Item = u32> + 'a,
+    {
+        let map = self.get_map();
+        dimensions
+            .filter_map(move |i| map.get(i))
+            .flatten()
+            .filter_map(move |i| self.load_vector(i as usize))
+    }
+
     /// Returns all vectors in given dimensions efficiently via an iterator
     #[inline]
     pub fn get_all_iter<'a>(
@@ -103,7 +119,7 @@ impl<D: Decodable> VectorStore<D> {
 
     /// Load all documents by their ids
     #[inline]
-    fn load_documents_iter<'a>(
+    pub fn load_documents_iter<'a>(
         &'a self,
         vec_ids: impl Iterator<Item = u32> + 'a,
     ) -> impl Iterator<Item = DocumentVector<D>> + 'a {
@@ -121,7 +137,7 @@ impl<D: Decodable> VectorStore<D> {
 
     /// Read and decode a vector from `self.store` and returns it
     #[inline]
-    fn load_vector(&self, id: usize) -> Option<DocumentVector<D>> {
+    pub fn load_vector(&self, id: usize) -> Option<DocumentVector<D>> {
         Self::decode_vec(self.store.get(id)?)
     }
 
@@ -156,6 +172,10 @@ pub(crate) fn build<D: Encodable, W: Write>(
         for dim in vector.vector().vec_indices() {
             dim_vec_map.entry(dim).or_default().push(vec_id as u32);
         }
+    }
+
+    for (_, v) in dim_vec_map.iter_mut() {
+        v.sort();
     }
 
     NewDimVecMap::new(dim_vec_map).build(index_builder)?;
