@@ -8,6 +8,7 @@ use crate::{
 };
 use byteorder::LittleEndian;
 use indexed_file::mem_file::MemFile;
+use serde::{Deserialize, Serialize};
 use std::{
     cmp::Ordering,
     io::{Read, Seek, Write},
@@ -19,7 +20,7 @@ pub(crate) const FILE_NAME: &str = "term_indexer";
 
 /// An in memory TermIndexer that allows efficient indexing of terms which is requried for document
 /// vectors being calculated.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct TermIndexer {
     index: Arc<MemFile>,
     tot_documents: usize,

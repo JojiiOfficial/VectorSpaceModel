@@ -4,6 +4,7 @@ use crate::{
     traits::{Decodable, Encodable},
 };
 use byteorder::{ByteOrder, LittleEndian, ReadBytesExt, WriteBytesExt};
+use serde::{Deserialize, Serialize};
 use std::{
     convert::TryFrom,
     io::{Cursor, Read, Write},
@@ -13,7 +14,7 @@ use std::{
 pub(crate) const FILE_NAME: &str = "metadata";
 
 /// Version of the index file
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum IndexVersion {
     V1 = 0u8,
@@ -73,7 +74,7 @@ pub(crate) trait MetadataBuild: Metadata {
 impl<T: Metadata> MetadataBuild for T {}
 
 /// Various metadata for the given Index
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub struct DefaultMetadata {
     pub version: IndexVersion,
     pub document_count: usize,

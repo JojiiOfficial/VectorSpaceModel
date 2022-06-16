@@ -9,6 +9,7 @@ use crate::{
     Vector,
 };
 use flate2::read::GzDecoder;
+use serde::{Deserialize, Serialize};
 use std::{
     fs::File,
     io::{BufReader, Cursor, Read},
@@ -18,7 +19,7 @@ use tar::Entry;
 
 type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Index<D: Decodable, M: Metadata> {
     metadata: M,
     indexer: TermIndexer,

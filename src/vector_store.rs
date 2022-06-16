@@ -7,6 +7,7 @@ use crate::{
 };
 use byteorder::LittleEndian;
 use indexed_file::mem_file::MemFile;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     io::{Read, Seek, Write},
@@ -18,7 +19,7 @@ use std::{
 pub(crate) const FILE_NAME: &str = "vectors";
 
 /// A struct containing raw data of vectors and a map from a dimension to a set of those vectors.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VectorStore<D: Decodable> {
     store: Arc<MemFile>,
     map: Option<Arc<DimVecMap>>,

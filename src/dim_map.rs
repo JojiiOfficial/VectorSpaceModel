@@ -4,6 +4,7 @@ use compressed_vec::{buffered::BufCVecRef, CVec};
 use indexed_file::{
     any::CloneableIndexedReader, index::Header as IndexHeader, index::Index, IndexableFile,
 };
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     io::{BufReader, Read, Seek, SeekFrom, Write},
@@ -15,7 +16,7 @@ pub(crate) const FILE_NAME: &str = "dim_map";
 
 /// A Dimension Vector map maps a dimension to all references of vectors which lay in the
 /// dimension. This allows much more efficient searching
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DimVecMap {
     /// Maps dimension indexes to positions in `data`
     index: Index,
