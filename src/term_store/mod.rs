@@ -51,14 +51,14 @@ impl TermIndexer {
 
     /// Finds a term in the termindex
     #[inline]
-    pub fn find_term(&mut self, term: &str) -> Option<IndexTerm> {
-        let dimension = binary_search(&mut self.index, term)?;
+    pub fn find_term(&self, term: &str) -> Option<IndexTerm> {
+        let dimension = binary_search(&self.index, term)?;
         self.load_term(dimension)
     }
 
     /// Gets a term by its dimension
     #[inline]
-    pub fn load_term(&mut self, dimension: usize) -> Option<IndexTerm> {
+    pub fn load_term(&self, dimension: usize) -> Option<IndexTerm> {
         let res = self.index.get(dimension)?;
         Some(IndexTerm::decode(res))
     }
