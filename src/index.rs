@@ -19,7 +19,7 @@ use tar::Entry;
 
 type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Index<D: Decodable, M: Metadata> {
     metadata: M,
     indexer: TermIndexer,
@@ -50,6 +50,11 @@ impl<D: Decodable, M: Metadata> Index<D, M> {
         &self.metadata
     }
 
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.indexer.is_empty() || self.vector_store.is_empty()
+    }
+
     // TODO: add function to create new vectors (incl. weights)
     pub fn build_vector_weights<S: AsRef<str>>(&self, terms: &[(S, f32)]) -> Option<Vector> {
         let terms: Vec<_> = terms
@@ -77,7 +82,7 @@ impl<D: Decodable, M: Metadata> Index<D, M> {
             .iter()
             .filter_map(|i| {
                 let item_pos = self.indexer.get_term(i.as_ref())?;
-                let item = self.indexer.clone().load_term(item_pos)?;
+                let item = self.indexer.load_term(item_pos)?;
                 Some((item_pos, item))
             })
             .map(|(pos, i)| {
@@ -99,7 +104,7 @@ impl<D: Decodable, M: Metadata> Index<D, M> {
 
     pub fn is_stopword_cust(&self, term: &str, threshold: f32) -> Option<bool> {
         let tot_docs = self.get_indexer().len() as f32;
-        let term = self.get_indexer().clone().find_term(term)?;
+        let term = self.get_indexer().find_term(term)?;
         let ratio = term.doc_frequency() as f32 / tot_docs * 100.0;
         Some(ratio >= threshold)
     }
@@ -181,5 +186,15 @@ impl<D: Decodable, M: Metadata> Index<D, M> {
 
     fn parse_metadata<T: Read>(entry: Entry<T>) -> Result<M> {
         M::load(entry).map_err(|_| Error::InvalidIndex)
+    }
+}
+
+impl<D: Decodable, M: Metadata + Default> Default for Index<D, M> {
+    fn default() -> Self {
+        Self {
+            metadata: Default::default(),
+            indexer: Default::default(),
+            vector_store: Default::default(),
+        }
     }
 }

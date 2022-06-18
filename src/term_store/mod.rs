@@ -184,3 +184,12 @@ impl document::Indexable for TermIndexer {
     }
 }
 */
+
+impl Default for TermIndexer {
+    fn default() -> Self {
+        Self {
+            index: Default::default(),
+            tot_documents: Default::default(),
+        }
+    }
+}

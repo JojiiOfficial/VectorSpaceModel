@@ -186,6 +186,16 @@ pub(crate) fn build<D: Encodable, W: Write>(
     Ok(())
 }
 
+impl<D: Decodable> Default for VectorStore<D> {
+    fn default() -> Self {
+        Self {
+            store: Default::default(),
+            map: Default::default(),
+            vec_type: Default::default(),
+        }
+    }
+}
+
 /*
 pub fn build_from_vecs<D: Encodable + Decodable>(
     vectors: Vec<DocumentVector<D>>,
