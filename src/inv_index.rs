@@ -1,5 +1,4 @@
-use crate::{build::output::OutputBuilder, error::Error, traits::Encodable};
-use byteorder::LittleEndian;
+use crate::{error::Error, traits::Encodable};
 use compressed_vec::{buffered::BufCVecRef, CVec};
 use indexed_file::{
     any::CloneableIndexedReader, index::Header as IndexHeader, index::Index, IndexableFile,
@@ -7,12 +6,9 @@ use indexed_file::{
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    io::{BufReader, Read, Seek, SeekFrom, Write},
+    io::{BufReader, Read, Seek, SeekFrom},
     sync::Arc,
 };
-
-/// FileName of dim_maps
-pub(crate) const FILE_NAME: &str = "dim_map";
 
 /// A Dimension Vector map maps a dimension to all references of vectors which lay in the
 /// dimension. This allows much more efficient searching
@@ -101,13 +97,46 @@ impl NewDimVecMap {
         Self { map }
     }
 
-    /// Build a dimension vector map and write it to `index_builder`
-    pub(crate) fn build<W: Write>(
-        &self,
-        index_builder: &mut OutputBuilder<W>,
-    ) -> Result<(), Error> {
-        index_builder.write_dim_vec_map(&self.encode::<LittleEndian>()?)?;
-        Ok(())
+    pub fn build(self) -> DimVecMap {
+        // Index position for each vector
+        let mut file_index = Vec::new();
+
+        let mut sorted_map = self
+            .map
+            .iter()
+            .map(|(k, v)| (*k, v.clone()))
+            .collect::<Vec<_>>();
+        sorted_map.sort_by(|a, b| a.0.cmp(&b.0));
+
+        let mut map_store = CVec::new();
+        let mut last_dim: Option<u32> = None;
+
+        for (dim, mut vecs) in sorted_map {
+            if last_dim.is_none() {
+                last_dim = Some(dim);
+            }
+
+            // Fill non mapped dimensions with 0s to make the CVS replace a HashMap
+            let ld = last_dim.as_ref().unwrap();
+            for _ in ld + 1..dim {
+                file_index.push(map_store.len() as u32);
+                map_store.push(0);
+            }
+
+            vecs.sort_unstable();
+            file_index.push(map_store.len() as u32);
+
+            map_store.push(vecs.len() as u32);
+            map_store.extend(vecs);
+
+            last_dim = Some(dim);
+        }
+
+        let index = Index::new(file_index).zero_len();
+        DimVecMap {
+            index,
+            data: map_store,
+        }
     }
 }
 
@@ -156,5 +185,15 @@ impl Encodable for NewDimVecMap {
         indexed_vectors.write_to(&mut out).unwrap();
 
         Ok(out)
+    }
+}
+
+impl Default for DimVecMap {
+    #[inline]
+    fn default() -> Self {
+        Self {
+            index: Default::default(),
+            data: CVec::new(),
+        }
     }
 }

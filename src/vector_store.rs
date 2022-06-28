@@ -1,5 +1,4 @@
 use crate::{
-    build::output::OutputBuilder,
     document::DocumentVector,
     error::Error,
     inv_index::{DimToVecs, DimVecMap, NewDimVecMap},
@@ -8,38 +7,17 @@ use crate::{
 use byteorder::LittleEndian;
 use indexed_file::mem_file::MemFile;
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap,
-    io::{Read, Seek, Write},
-    marker::PhantomData,
-    sync::Arc,
-};
-
-/// File name in the index tar
-pub(crate) const FILE_NAME: &str = "vectors";
+use std::{collections::HashMap, marker::PhantomData};
 
 /// A struct containing raw data of vectors and a map from a dimension to a set of those vectors.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct VectorStore<D: Decodable> {
-    store: Arc<MemFile>,
-    map: Option<Arc<DimVecMap>>,
+    store: MemFile,
+    map: DimVecMap,
     vec_type: PhantomData<D>,
 }
 
 impl<D: Decodable> VectorStore<D> {
-    /// Builds data for a new DocumentStore. This contains all generated vectors.
-    ///
-    /// The `map` gets initialized with `None` and hast to be set afterwards using
-    /// `vec_store.set_dim_map(..)`. Otherwise VectorStore will panic
-    pub fn new<R: Read + Seek + Unpin>(reader: R) -> Result<Self, Error> {
-        let store: MemFile = bincode::deserialize_from(reader)?;
-        Ok(Self {
-            store: Arc::new(store),
-            map: None,
-            vec_type: PhantomData,
-        })
-    }
-
     /// Get the amount of vectors in the `VectorStore`
     #[inline]
     pub fn len(&self) -> usize {
@@ -61,7 +39,7 @@ impl<D: Decodable> VectorStore<D> {
 
     #[inline(always)]
     pub fn get_map(&self) -> &DimVecMap {
-        self.map.as_ref().expect("set_dim_map was not called")
+        &self.map
     }
 
     /// Return the size of the given dimension. The size represents the amount of vectors which are
@@ -147,18 +125,20 @@ impl<D: Decodable> VectorStore<D> {
         DocumentVector::<D>::decode::<LittleEndian, _>(data).ok()
     }
 
-    /// Set the dim_vec_map to `map`
-    #[inline(always)]
-    pub(crate) fn set_dim_map(&mut self, map: DimVecMap) {
-        self.map = Some(Arc::new(map));
+    #[inline]
+    pub(crate) fn clone_full(&self) -> Self {
+        Self {
+            store: self.store.clone(),
+            map: self.map.clone(),
+            vec_type: self.vec_type,
+        }
     }
 }
 
 /// Creates a new DocumentStore using a with `build` generated DocumentStore.
-pub(crate) fn build<D: Encodable, W: Write>(
-    index_builder: &mut OutputBuilder<W>,
+pub(crate) fn build<D: Encodable + Decodable>(
     vectors: Vec<DocumentVector<D>>,
-) -> Result<(), Error> {
+) -> Result<VectorStore<D>, Error> {
     //let mut encoded_vectors: Vec<u8> = Vec::new();
     let mut index = MemFile::with_capacity(vectors.len());
 
@@ -176,17 +156,20 @@ pub(crate) fn build<D: Encodable, W: Write>(
     }
 
     for (_, v) in dim_vec_map.iter_mut() {
-        v.sort();
+        v.sort_unstable();
     }
 
-    NewDimVecMap::new(dim_vec_map).build(index_builder)?;
+    let map = NewDimVecMap::new(dim_vec_map).build();
 
-    let enc = bincode::serialize(&index)?;
-    index_builder.write_vectors(&enc)?;
-    Ok(())
+    Ok(VectorStore {
+        store: index,
+        map,
+        vec_type: PhantomData,
+    })
 }
 
 impl<D: Decodable> Default for VectorStore<D> {
+    #[inline]
     fn default() -> Self {
         Self {
             store: Default::default(),
@@ -195,36 +178,3 @@ impl<D: Decodable> Default for VectorStore<D> {
         }
     }
 }
-
-/*
-pub fn build_from_vecs<D: Encodable + Decodable>(
-    vectors: Vec<DocumentVector<D>>,
-) -> Result<VectorStore<D>, Error> {
-    //let mut encoded_vectors: Vec<u8> = Vec::new();
-    let mut index = MemFile::with_capacity(vectors.len());
-
-    // Map from dimensions to vectors in dimension
-    let mut dim_vec_map: DimToVecs = HashMap::new();
-
-    for (pos, vector) in vectors.into_iter().enumerate() {
-        // Bulid map from dimension to all vectors in this dimension
-        for dim in vector.vector().vec_indices() {
-            dim_vec_map.entry(dim).or_default().push(pos as u32);
-        }
-
-        let vec_enc = vector.encode::<LittleEndian>()?;
-        index.insert(&vec_enc);
-    }
-
-    let encoded_dv = Cursor::new(NewDimVecMap::new(dim_vec_map).encode::<LittleEndian>()?);
-    let dv_map = DimVecMap::load(encoded_dv)?;
-
-    let vec_store = VectorStore {
-        store: Arc::new(index),
-        map: Some(Arc::new(dv_map)),
-        vec_type: PhantomData::<D>,
-    };
-
-    Ok(vec_store)
-}
-*/

@@ -1,14 +1,13 @@
-pub mod output;
+//pub mod output;
 pub mod term_store;
 pub mod weights;
 
 use crate::{
-    build::output::OutputBuilder,
-    metadata::{Metadata, MetadataBuild},
     term_store::TermIndexer,
     traits::{Decodable, Encodable},
-    DocumentVector, Error, Vector,
+    vector_store, DocumentVector, Error, Index, Vector,
 };
+use serde::Serialize;
 use std::{collections::HashSet, io::Write};
 use term_store::TermStoreBuilder;
 
@@ -118,32 +117,36 @@ impl<D> IndexBuilder<D> {
 }
 
 impl<D: Decodable + Encodable> IndexBuilder<D> {
-    pub fn build<M: Metadata, W: Write>(mut self, output: W, mut metadata: M) -> Result<(), Error> {
-        let mut vecs = self.vectors;
-        let mut len = vecs.len();
+    pub fn build_to_writer<W: Write, M: Serialize>(
+        self,
+        out: W,
+        metadata: M,
+    ) -> Result<Index<D, M>, Error> {
+        let index = self.build(metadata)?;
+        bincode::serialize_into(out, &index)?;
+        Ok(index)
+    }
 
-        self.terms.adjust_vecs(&mut vecs, &self.term_weight);
+    pub fn build<M>(mut self, metadata: M) -> Result<Index<D, M>, Error> {
+        self.terms.adjust_vecs(&mut self.vectors, &self.term_weight);
 
-        let mut out_builder = OutputBuilder::new(output)?;
-
-        let indexer =
-            crate::term_store::TermIndexer::build_from_termstore(self.terms, &mut out_builder)?;
+        let indexer = TermIndexer::build(self.terms)?;
 
         if let Some(filter) = self.output_filter {
-            vecs = vecs
+            self.vectors = self
+                .vectors
                 .into_iter()
                 .filter_map(|vec| filter(vec, &indexer))
-                .collect::<Vec<_>>();
-            len = vecs.len();
+                .collect();
         }
 
-        metadata.build(&mut out_builder, len)?;
+        let vstore = vector_store::build(self.vectors)?;
 
-        crate::vector_store::build(&mut out_builder, vecs)?;
-
-        out_builder.finish()?;
-
-        Ok(())
+        Ok(Index {
+            metadata,
+            indexer,
+            vector_store: vstore,
+        })
     }
 }
 

@@ -1,5 +1,4 @@
 use crate::{
-    build::output::OutputBuilder,
     error::Error,
     traits::{Decodable, Encodable},
 };
@@ -7,11 +6,8 @@ use byteorder::{ByteOrder, LittleEndian, ReadBytesExt, WriteBytesExt};
 use serde::{Deserialize, Serialize};
 use std::{
     convert::TryFrom,
-    io::{Cursor, Read, Write},
+    io::{Cursor, Read},
 };
-
-/// File name in the index tar
-pub(crate) const FILE_NAME: &str = "metadata";
 
 /// Version of the index file
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -53,25 +49,6 @@ pub trait Metadata: Encodable + Decodable {
         Self::decode::<LittleEndian, _>(Cursor::new(buf))
     }
 }
-
-/// Internal behavior for creating new indexes. This should not be overwritten and is only public
-/// within this crate.
-pub(crate) trait MetadataBuild: Metadata {
-    /// Builds a new Metadata file
-    fn build<W: Write>(
-        &mut self,
-        index_builder: &mut OutputBuilder<W>,
-        doc_count: usize,
-    ) -> Result<(), Error> {
-        self.set_document_count(doc_count);
-        let mut out = Vec::new();
-        out.write_all(&self.encode::<LittleEndian>()?)?;
-        index_builder.write_metadata(&out)?;
-        Ok(())
-    }
-}
-
-impl<T: Metadata> MetadataBuild for T {}
 
 /// Various metadata for the given Index
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
