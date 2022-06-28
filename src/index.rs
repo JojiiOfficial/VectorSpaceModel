@@ -96,6 +96,19 @@ impl<D: Decodable, M> Index<D, M> {
         Some(ratio >= threshold)
     }
 
+    /// Defragments the custom order mapping which has to be used to add new terms to the index.
+    /// This can change indices of vectors which can become an issue if you use them outside to
+    /// reference something.
+    pub fn defrag_cust_ord(&mut self) {
+        if self.indexer.is_sorted() {
+            return;
+        }
+
+        todo!()
+    }
+
+    // TODO: add functions to insert new vectors later on, including automatically inserting new terms
+
     #[inline]
     pub fn is_stopword(&self, term: &str) -> Option<bool> {
         self.is_stopword_cust(term, 35.0)

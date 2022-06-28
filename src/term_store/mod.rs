@@ -112,12 +112,29 @@ impl TermIndexer {
     }
 
     /// Inserts a new term into the indexer. This requires `build_cust_sort` being called first (once)
-    pub fn insert_new(&mut self, _term: IndexTerm) -> bool {
+    pub fn insert_new(&mut self, term: IndexTerm) -> Option<u32> {
         if self.is_sorted() {
-            return false;
+            return None;
         }
 
-        false
+        let enc = term.encode::<LittleEndian>().expect("Invalid item");
+        let id = self.index.insert(&enc) as u32;
+
+        self.sort_index.push(id);
+
+        self.update_sort_index();
+
+        Some(id)
+    }
+
+    fn update_sort_index(&mut self) {
+        let index = &self.index;
+
+        self.sort_index.sort_by_cached_key(|i| {
+            IndexTerm::decode(index.get(*i as usize).unwrap())
+                .text()
+                .to_string()
+        });
     }
 
     fn get_term_raw(&self, term: &str) -> Option<(usize, IndexTerm)> {
@@ -132,13 +149,14 @@ impl TermIndexer {
         }
 
         // Custom sort-mapping available so we need to map those indices
-        gen_bin_search_by(&self.index, self.index.len(), |idx, pos| {
+        let mpr = gen_bin_search_by(&self.index, self.index.len(), |idx, pos| {
             let mp_pos = self.sort_index[pos];
             let i = idx.get_unchecked(mp_pos as usize);
             let item = IndexTerm::decode(i);
-            (item.text().cmp(term), item)
+            (item.text().cmp(term), mp_pos as usize)
         })
-        .ok()
+        .ok()?;
+        Some((mpr.1, self.load_term(mpr.1)?))
     }
 
     #[inline]
