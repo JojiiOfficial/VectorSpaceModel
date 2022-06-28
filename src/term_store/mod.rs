@@ -51,6 +51,7 @@ impl TermIndexer {
     }
 
     /// Finds a term in the termindex
+    /// Term_str -> TermObj
     #[inline]
     pub fn find_term(&self, term: &str) -> Option<IndexTerm> {
         let dimension = binary_search(&self.index, term)?;
@@ -58,10 +59,17 @@ impl TermIndexer {
     }
 
     /// Gets a term by its dimension
+    /// Dimension -> Term
     #[inline]
     pub fn load_term(&self, dimension: usize) -> Option<IndexTerm> {
         let res = self.index.get(dimension)?;
         Some(IndexTerm::decode(res))
+    }
+
+    /// Term -> Dimension
+    #[inline]
+    pub fn get_term(&self, term: &str) -> Option<usize> {
+        binary_search(&self.index, term)
     }
 
     /// Sets the total amount of documents in the index. This is required for better indexing
@@ -106,11 +114,6 @@ impl TermIndexer {
             index: Arc::new(index),
             tot_documents: 0,
         })
-    }
-
-    #[inline]
-    pub fn get_term(&self, term: &str) -> Option<usize> {
-        binary_search(&self.index, term)
     }
 
     #[cfg(feature = "genbktree")]

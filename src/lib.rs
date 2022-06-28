@@ -1,8 +1,8 @@
 pub mod build;
-pub mod dim_map;
 pub mod document;
 pub mod error;
 pub mod index;
+pub mod inv_index;
 pub mod lock_step;
 pub mod metadata;
 pub mod term_store;

@@ -1,7 +1,7 @@
 use crate::{
     build::weights::TermWeight,
-    dim_map::{self, DimVecMap},
     error::Error,
+    inv_index::{self, DimVecMap},
     metadata::{self, Metadata},
     term_store::{self, TermIndexer},
     traits::Decodable,
@@ -138,7 +138,7 @@ impl<D: Decodable, M: Metadata> Index<D, M> {
             match name.as_str() {
                 metadata::FILE_NAME => metadata = Some(Self::parse_metadata(entry)?),
                 term_store::FILE_NAME => term_indexer = Some(Self::parse_indexer(entry, size)?),
-                dim_map::FILE_NAME => dim_map = Some(Self::parse_dim_map(entry, size)?),
+                inv_index::FILE_NAME => dim_map = Some(Self::parse_dim_map(entry, size)?),
                 vector_store::FILE_NAME => {
                     vector_store = Some(Self::parse_vector_store(entry, size)?)
                 }

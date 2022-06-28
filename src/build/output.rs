@@ -1,8 +1,8 @@
 #![allow(unused)]
 
 use crate::{
-    dim_map,
     error::Error,
+    inv_index,
     metadata::{self, Metadata},
     term_store,
     traits::{Decodable, Encodable},
@@ -42,7 +42,7 @@ impl<W: Write> OutputBuilder<W> {
     }
 
     pub fn write_dim_vec_map(&mut self, data: &[u8]) -> Result<()> {
-        self.append_file(dim_map::FILE_NAME, data)?;
+        self.append_file(inv_index::FILE_NAME, data)?;
         Ok(())
     }
 

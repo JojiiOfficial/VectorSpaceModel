@@ -1,8 +1,8 @@
 use crate::{
     build::output::OutputBuilder,
-    dim_map::{DimToVecs, DimVecMap, NewDimVecMap},
     document::DocumentVector,
     error::Error,
+    inv_index::{DimToVecs, DimVecMap, NewDimVecMap},
     traits::{Decodable, Encodable},
 };
 use byteorder::LittleEndian;
