@@ -20,18 +20,6 @@ pub struct Index<D: Decodable, M> {
     pub(crate) vector_store: VectorStore<D>,
 }
 
-impl<D: Decodable, M: DeserializeOwned + Serialize> Index<D, M> {
-    /// Opens an Index from a tar.gz file and returns a new `Index`
-    pub fn open<P: AsRef<Path>>(file: P) -> Result<Index<D, M>> {
-        Self::from_reader(BufReader::new(File::open(file)?))
-    }
-
-    /// Read an index-archive and build an `Index` out of it
-    pub fn from_reader<R: Read>(reader: R) -> Result<Index<D, M>> {
-        bincode::deserialize_from(reader).map_err(|_| Error::InvalidIndex)
-    }
-}
-
 impl<D: Decodable, M> Index<D, M> {
     /// Returns the vector store of the index
     #[inline]
@@ -56,7 +44,6 @@ impl<D: Decodable, M> Index<D, M> {
         self.indexer.is_empty() || self.vector_store.is_empty()
     }
 
-    // TODO: add function to create new vectors (incl. weights)
     pub fn build_vector_weights<S: AsRef<str>>(&self, terms: &[(S, f32)]) -> Option<Vector> {
         let terms: Vec<_> = terms
             .iter()
@@ -73,7 +60,6 @@ impl<D: Decodable, M> Index<D, M> {
         Some(Vector::create_new_raw(terms))
     }
 
-    // TODO: add function to create new vectors (incl. weights)
     pub fn build_vector<S: AsRef<str>>(
         &self,
         terms: &[S],
@@ -116,12 +102,39 @@ impl<D: Decodable, M> Index<D, M> {
     }
 
     #[inline]
-    pub fn indexer_mut(&mut self) -> &mut TermIndexer {
+    pub fn get_indexer_mut(&mut self) -> &mut TermIndexer {
         &mut self.indexer
+    }
+
+    #[inline]
+    pub fn get_vector_store_mut(&mut self) -> &mut VectorStore<D> {
+        &mut self.vector_store
+    }
+
+    #[inline]
+    pub fn get_metadata_mut(&mut self) -> &mut M {
+        &mut self.metadata
     }
 }
 
-impl<D: Decodable + DeserializeOwned, M: DeserializeOwned + Serialize + Clone> Index<D, M> {
+impl<D: Decodable, M: DeserializeOwned + Serialize> Index<D, M> {
+    /// Opens an Index from a tar.gz file and returns a new `Index`
+    #[inline]
+    pub fn open<P: AsRef<Path>>(file: P) -> Result<Index<D, M>> {
+        Self::from_reader(BufReader::new(File::open(file)?))
+    }
+
+    /// Read an index-archive and build an `Index` out of it
+    #[inline]
+    pub fn from_reader<R: Read>(reader: R) -> Result<Index<D, M>> {
+        bincode::deserialize_from(reader).map_err(|_| Error::InvalidIndex)
+    }
+}
+
+impl<D: Decodable, M: Clone> Index<D, M> {
+    /// Clones the index. This is a very heavy operation if the index is big. It is in a separate
+    /// Method without implementing the Clone trait to prevent accidental heavy clones
+    #[inline]
     pub fn clone_heavy(&self) -> Self {
         let m_c = self.metadata.clone();
         let indexer = self.indexer.clone_heavy();
@@ -135,6 +148,7 @@ impl<D: Decodable + DeserializeOwned, M: DeserializeOwned + Serialize + Clone> I
 }
 
 impl<D: Decodable, M: Metadata + Default> Default for Index<D, M> {
+    #[inline]
     fn default() -> Self {
         Self {
             metadata: Default::default(),
@@ -144,6 +158,7 @@ impl<D: Decodable, M: Metadata + Default> Default for Index<D, M> {
     }
 }
 
+#[inline]
 fn serialize_vs<D: Decodable, S>(v: &VectorStore<D>, ser: S) -> std::result::Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
@@ -152,6 +167,7 @@ where
     Ok(s)
 }
 
+#[inline]
 fn deserialize_vs<'de, D: Decodable, Des>(
     de: Des,
 ) -> std::result::Result<VectorStore<D>, Des::Error>

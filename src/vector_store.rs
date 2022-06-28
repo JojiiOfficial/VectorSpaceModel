@@ -1,11 +1,13 @@
 use crate::{
     document::DocumentVector,
     error::Error,
-    inv_index::{DimToVecs, DimVecMap, NewDimVecMap},
+    inv_index::{DimToVecs, InvertedIndex, NewDimVecMap},
     traits::{Decodable, Encodable},
+    Vector,
 };
 use byteorder::LittleEndian;
 use indexed_file::mem_file::MemFile;
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, marker::PhantomData};
 
@@ -13,7 +15,7 @@ use std::{collections::HashMap, marker::PhantomData};
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VectorStore<D: Decodable> {
     store: MemFile,
-    map: DimVecMap,
+    map: InvertedIndex,
     vec_type: PhantomData<D>,
 }
 
@@ -31,6 +33,7 @@ impl<D: Decodable> VectorStore<D> {
     }
 
     /// Returns an iterator over all Vectors in the vecstore
+    #[inline]
     pub fn iter(&self) -> impl Iterator<Item = DocumentVector<D>> + '_ {
         self.store
             .iter()
@@ -38,7 +41,7 @@ impl<D: Decodable> VectorStore<D> {
     }
 
     #[inline(always)]
-    pub fn get_map(&self) -> &DimVecMap {
+    pub fn get_map(&self) -> &InvertedIndex {
         &self.map
     }
 
@@ -57,10 +60,24 @@ impl<D: Decodable> VectorStore<D> {
     }
 
     /// Returns all unique vector references laying in `dimensions`
-    pub fn get_in_dims(&self, dimensions: &[u32]) -> Vec<u32> {
+    #[inline]
+    pub fn get_in_dims_iter2<'a, I>(&'a self, dimensions: I) -> impl Iterator<Item = u32> + 'a
+    where
+        I: Iterator<Item = u32> + 'a,
+    {
+        dimensions
+            .filter_map(move |i| self.get_map().get(i))
+            .flatten()
+            .unique()
+    }
+
+    /// Returns all unique vector references laying in `dimensions`
+    pub fn get_in_dims_iter<I>(&self, dimensions: I) -> Vec<u32>
+    where
+        I: Iterator<Item = u32>,
+    {
         let mut vec_refs: Vec<_> = dimensions
-            .iter()
-            .filter_map(|i| self.get_map().get(*i))
+            .filter_map(|i| self.get_map().get(i))
             .flatten()
             .collect();
 
@@ -70,8 +87,15 @@ impl<D: Decodable> VectorStore<D> {
         vec_refs
     }
 
+    /// Returns all unique vector references laying in `dimensions`
+    #[inline]
+    pub fn get_in_dims(&self, dimensions: &[u32]) -> Vec<u32> {
+        self.get_in_dims_iter(dimensions.iter().copied())
+    }
+
     /// Returns all vectors in given dimensions efficiently via an iterator. May contain duplicates
     /// If vectors share multiple dimensions with the passed ones
+    #[inline]
     pub fn get_all_iter2<'a, I>(
         &'a self,
         dimensions: I,
@@ -94,6 +118,15 @@ impl<D: Decodable> VectorStore<D> {
     ) -> impl Iterator<Item = DocumentVector<D>> + 'a {
         let vec_refs = self.get_in_dims(dimensions);
         self.load_documents_iter(vec_refs.into_iter())
+    }
+
+    /// Returns all for query_vec
+    #[inline]
+    pub fn get_for_vec<'a>(
+        &'a self,
+        q_vec: &'a Vector,
+    ) -> impl Iterator<Item = DocumentVector<D>> + 'a {
+        self.load_documents_iter(self.get_in_dims_iter2(q_vec.vec_indices()))
     }
 
     /// Load all documents by their ids

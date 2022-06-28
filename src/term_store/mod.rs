@@ -95,13 +95,11 @@ impl TermIndexer {
             index.insert(&term.1.encode::<LittleEndian>()?);
         }
 
-        let ts = Self {
+        Ok(Self {
             index,
             tot_documents: 0,
             sort_index,
-        };
-
-        Ok(ts)
+        })
     }
 
     /// Builds a new cust sort mapping index

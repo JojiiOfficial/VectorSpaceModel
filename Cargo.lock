@@ -619,6 +619,7 @@ dependencies = [
  "compressed_vec",
  "criterion",
  "indexed_file",
+ "itertools",
  "rand",
  "serde",
 ]

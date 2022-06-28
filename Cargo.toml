@@ -25,6 +25,7 @@ byteorder = "1.4.3"
 serde = { version = "1.0.137", features = ["derive"], default-features = false }
 bincode = "1.3.3"
 bktree = { git = "https://github.com/JojiiOfficial/bktree", optional = true }
+itertools = "*"
 
 [dev-dependencies]
 criterion = "0.3.5"

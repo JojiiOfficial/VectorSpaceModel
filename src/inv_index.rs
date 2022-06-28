@@ -1,48 +1,21 @@
 use crate::{error::Error, traits::Encodable};
 use compressed_vec::{buffered::BufCVecRef, CVec};
-use indexed_file::{
-    any::CloneableIndexedReader, index::Header as IndexHeader, index::Index, IndexableFile,
-};
+use indexed_file::{any::CloneableIndexedReader, index::Index, IndexableFile};
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap,
-    io::{BufReader, Read, Seek, SeekFrom},
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 /// A Dimension Vector map maps a dimension to all references of vectors which lay in the
 /// dimension. This allows much more efficient searching
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DimVecMap {
+pub struct InvertedIndex {
     /// Maps dimension indexes to positions in `data`
     index: Index,
     /// Contains the vector ids for each dimension
     data: CVec,
 }
 
-impl DimVecMap {
-    /// Reads and decodes a dimension-vector-map from a reader
-    pub fn load<R: Read + Unpin + Seek>(reader: R) -> Result<Self, Error> {
-        let mut buf_read = BufReader::new(reader);
-
-        let header = IndexHeader::decode(&mut buf_read)?;
-        let index = Index::decode(&mut buf_read, &header)?;
-
-        // Seek to beginning of actual data
-        buf_read.seek(SeekFrom::Start(index.len_bytes() as u64))?;
-
-        // Read all vector-data into Vec<u8> and create new IndexedReader
-        let mut s: Vec<u8> = Vec::new();
-        buf_read.read_to_end(&mut s)?;
-
-        let data = CVec::from_bytes(&s)?;
-        let index = index.zero_len();
-
-        Ok(Self { index, data })
-    }
-
+impl InvertedIndex {
     /// Returns a vec over all Vector IDs in dimension `dim`
-    #[inline]
     pub fn get(&self, dim: u32) -> Option<Vec<u32>> {
         let arr_start = self.index.get2(dim as usize)? as usize;
 
@@ -97,7 +70,7 @@ impl NewDimVecMap {
         Self { map }
     }
 
-    pub fn build(self) -> DimVecMap {
+    pub fn build(self) -> InvertedIndex {
         // Index position for each vector
         let mut file_index = Vec::new();
 
@@ -133,7 +106,7 @@ impl NewDimVecMap {
         }
 
         let index = Index::new(file_index).zero_len();
-        DimVecMap {
+        InvertedIndex {
             index,
             data: map_store,
         }
@@ -188,7 +161,7 @@ impl Encodable for NewDimVecMap {
     }
 }
 
-impl Default for DimVecMap {
+impl Default for InvertedIndex {
     #[inline]
     fn default() -> Self {
         Self {
