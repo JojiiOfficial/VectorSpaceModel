@@ -9,17 +9,21 @@ use byteorder::LittleEndian;
 use indexed_file::mem_file::MemFile;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, marker::PhantomData};
+use std::{
+    collections::HashMap,
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+};
 
 /// A struct containing raw data of vectors and a map from a dimension to a set of those vectors.
 #[derive(Debug, Serialize, Deserialize)]
-pub struct VectorStore<D: Decodable> {
+pub struct VectorStore<D> {
     store: MemFile,
     map: InvertedIndex,
     vec_type: PhantomData<D>,
 }
 
-impl<D: Decodable> VectorStore<D> {
+impl<D> VectorStore<D> {
     /// Get the amount of vectors in the `VectorStore`
     #[inline]
     pub fn len(&self) -> usize {
@@ -32,15 +36,7 @@ impl<D: Decodable> VectorStore<D> {
         self.len() == 0
     }
 
-    /// Returns an iterator over all Vectors in the vecstore
     #[inline]
-    pub fn iter(&self) -> impl Iterator<Item = DocumentVector<D>> + '_ {
-        self.store
-            .iter()
-            .map(|i| Self::decode_vec(i).expect("Invalid index format"))
-    }
-
-    #[inline(always)]
     pub fn get_map(&self) -> &InvertedIndex {
         &self.map
     }
@@ -50,13 +46,6 @@ impl<D: Decodable> VectorStore<D> {
     #[inline]
     pub fn dimension_size(&self, dimension: u32) -> usize {
         self.get_map().get(dimension).map(|i| i.len()).unwrap_or(0)
-    }
-
-    /// Returns all vectors in `dimension`
-    #[inline]
-    pub fn get_in_dim(&self, dimension: u32) -> Option<Vec<DocumentVector<D>>> {
-        let vec_refs = self.get_map().get(dimension)?;
-        Some(self.load_documents(&vec_refs))
     }
 
     /// Returns all unique vector references laying in `dimensions`
@@ -91,6 +80,32 @@ impl<D: Decodable> VectorStore<D> {
     #[inline]
     pub fn get_in_dims(&self, dimensions: &[u32]) -> Vec<u32> {
         self.get_in_dims_iter(dimensions.iter().copied())
+    }
+
+    #[inline]
+    pub(crate) fn clone_full(&self) -> Self {
+        Self {
+            store: self.store.clone(),
+            map: self.map.clone(),
+            vec_type: self.vec_type,
+        }
+    }
+}
+
+impl<D: Decodable> VectorStore<D> {
+    /// Returns an iterator over all Vectors in the vecstore
+    #[inline]
+    pub fn iter(&self) -> impl Iterator<Item = DocumentVector<D>> + '_ {
+        self.store
+            .iter()
+            .map(|i| Self::decode_vec(i).expect("Invalid index format"))
+    }
+
+    /// Returns all vectors in `dimension`
+    #[inline]
+    pub fn get_in_dim(&self, dimension: u32) -> Option<Vec<DocumentVector<D>>> {
+        let vec_refs = self.get_map().get(dimension)?;
+        Some(self.load_documents(&vec_refs))
     }
 
     /// Returns all vectors in given dimensions efficiently via an iterator. May contain duplicates
@@ -157,14 +172,61 @@ impl<D: Decodable> VectorStore<D> {
     fn decode_vec(data: &[u8]) -> Option<DocumentVector<D>> {
         DocumentVector::<D>::decode::<LittleEndian, _>(data).ok()
     }
+}
+
+impl<D: Encodable + Decodable> VectorStore<D> {
+    #[inline]
+    pub fn mod_vector<'a>(&'a mut self, id: u32) -> Option<VecMod<'a, D>> {
+        let vec = self.load_vector(id as usize)?;
+        Some(VecMod::new(self, vec, id))
+    }
+}
+
+/// Helper to modify a vector within a vector store
+pub struct VecMod<'a, D: Decodable + Encodable> {
+    store: &'a mut VectorStore<D>,
+    vec: DocumentVector<D>,
+    v_id: u32,
+}
+
+impl<'a, D: Decodable + Encodable> VecMod<'a, D> {
+    #[inline]
+    pub(crate) fn new(store: &'a mut VectorStore<D>, vec: DocumentVector<D>, v_id: u32) -> Self {
+        Self { store, vec, v_id }
+    }
+}
+
+impl<'a, D: Decodable + Encodable> Deref for VecMod<'a, D> {
+    type Target = Vector;
 
     #[inline]
-    pub(crate) fn clone_full(&self) -> Self {
-        Self {
-            store: self.store.clone(),
-            map: self.map.clone(),
-            vec_type: self.vec_type,
-        }
+    fn deref(&self) -> &Self::Target {
+        self.vec.vector()
+    }
+}
+
+impl<'a, D: Decodable + Encodable> DerefMut for VecMod<'a, D> {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.vec.vector_mut()
+    }
+}
+
+impl<'a, D: Decodable + Encodable> AsRef<Vector> for VecMod<'a, D> {
+    #[inline]
+    fn as_ref(&self) -> &Vector {
+        self.deref()
+    }
+}
+
+impl<'a, D: Encodable + Decodable> Drop for VecMod<'a, D> {
+    #[inline]
+    fn drop(&mut self) {
+        let enc = self
+            .vec
+            .encode::<LittleEndian>()
+            .expect("Failed to encode vec again");
+        self.store.store.replace(self.v_id as usize, &enc);
     }
 }
 

@@ -45,6 +45,11 @@ impl<D> DocumentVector<D> {
     }
 
     #[inline]
+    pub fn into_vec(self) -> Vector {
+        self.vec
+    }
+
+    #[inline]
     pub(crate) fn set_vec(&mut self, new_vec: Vector) {
         self.vec = new_vec
     }

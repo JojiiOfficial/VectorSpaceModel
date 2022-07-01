@@ -48,6 +48,12 @@ impl Vector {
         self.scalar(other) / (self.length * other.length)
     }
 
+    /// Returns a mutable reference to the inner vector
+    #[inline]
+    pub fn sparse_vec_mut(&mut self) -> &mut Vec<(u32, f32)> {
+        &mut self.inner
+    }
+
     /// Returns the reference to the inner vector
     #[inline]
     pub fn sparse_vec(&self) -> &Vec<(u32, f32)> {
