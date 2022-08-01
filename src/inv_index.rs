@@ -55,6 +55,10 @@ impl InvertedIndex {
 
         map
     }
+
+    pub fn byte_len(&self) -> usize {
+        self.index.len_bytes() + self.data.byte_len()
+    }
 }
 
 pub type DimToVecs = HashMap<u32, Vec<u32>>;
