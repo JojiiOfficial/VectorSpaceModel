@@ -155,7 +155,7 @@ impl Encodable for NewDimVecMap {
 
         let index = Arc::new(Index::new(file_index).zero_len());
 
-        let data = map_store.as_bytes();
+        let data = bincode::serialize(&map_store).unwrap();
         let mut out = Vec::with_capacity(data.len());
 
         let mut indexed_vectors = CloneableIndexedReader::new_custom(data, index);

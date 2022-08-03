@@ -20,7 +20,7 @@ fn has_dim(c: &mut Criterion) {
     c.bench_function("has_dim long", |b| b.iter(|| vec_long.has_dim(10)));
 }
 
-fn similarity(c: &mut Criterion) {
+fn overlapping(c: &mut Criterion) {
     c.bench_function("overlapping", |b| {
         let vec1 = get_word_vector(1071, 185692);
         let vec2 = get_word_vector(603, 185692);
@@ -28,7 +28,7 @@ fn similarity(c: &mut Criterion) {
     });
 }
 
-fn overlapping(c: &mut Criterion) {
+fn similarity(c: &mut Criterion) {
     c.bench_function("similarity", |b| {
         b.iter_custom(|iter| {
             let vec1 = get_word_vector(1071, 185692);

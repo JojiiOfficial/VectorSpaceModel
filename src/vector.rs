@@ -45,7 +45,11 @@ impl Vector {
     /// Calculates the similarity between two vectors
     #[inline]
     pub fn similarity(&self, other: &Vector) -> f32 {
-        self.scalar(other) / (self.length * other.length)
+        let sc = self.scalar(other);
+        if sc == 0.0 {
+            return 0.0;
+        }
+        sc / (self.length * other.length)
     }
 
     /// Returns a mutable reference to the inner vector
@@ -81,6 +85,8 @@ impl Vector {
         if !self.could_overlap(other) {
             return false;
         }
+
+        //
 
         LockStepIter::new(self.inner.iter().copied(), other.inner.iter().copied())
             .next()
@@ -154,6 +160,18 @@ impl Vector {
         LockStepIter::new(self.inner.iter().copied(), other.inner.iter().copied())
             .map(|(_, a, b)| a * b)
             .sum()
+    }
+
+    /// Returns the value of the given dimension if exists
+    #[inline]
+    pub fn get_dim(&self, dim: u32) -> Option<f32> {
+        self.inner
+            .binary_search_by(|a| {
+                let a = a.0;
+                a.cmp(&dim)
+            })
+            .ok()
+            .map(|i| self.inner[i].1)
     }
 
     /// Calculate the vector length
